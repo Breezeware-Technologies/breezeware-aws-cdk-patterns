@@ -3,6 +3,7 @@ package containerpatterns
 import (
 	"strconv"
 
+	breezewarenetwork "github.com/Breezeware-Technologies/breezeware-aws-cdk-patterns/network"
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	ec2 "github.com/aws/aws-cdk-go/awscdk/v2/awsec2"
 	ecr "github.com/aws/aws-cdk-go/awscdk/v2/awsecr"
@@ -40,14 +41,14 @@ type LoadBalancedEc2ServiceProps struct {
 
 type ClusterProps struct {
 	ClusterName    string
-	Vpc            VpcProps
+	Vpc            breezewarenetwork.VpcProps
 	SecurityGroups []ec2.ISecurityGroup
 }
 
-type VpcProps struct {
-	Id        string
-	IsDefault bool
-}
+// type VpcProps struct {
+// 	Id        string
+// 	IsDefault bool
+// }
 
 type TaskDefinition struct {
 	FamilyName string

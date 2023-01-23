@@ -1,6 +1,7 @@
 package containerpatterns
 
 import (
+	breezewarenetwork "github.com/Breezeware-Technologies/breezeware-aws-cdk-patterns/network"
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsautoscaling"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsec2"
@@ -28,9 +29,9 @@ type containerCompute struct {
 	httpsListener     awselasticloadbalancingv2.IApplicationListener
 }
 
-type VpcProps struct {
-	VpcId string
-}
+// type VpcProps struct {
+// 	VpcId string
+// }
 
 type ContainerComputeClusterProps struct {
 	Name                             string
@@ -128,9 +129,9 @@ func (hl *containerCompute) HttpsListener() awselasticloadbalancingv2.IApplicati
 	return hl.httpsListener
 }
 
-func LookupVpc(scope constructs.Construct, id *string, props *VpcProps) awsec2.IVpc {
+func LookupVpc(scope constructs.Construct, id *string, props *breezewarenetwork.VpcProps) awsec2.IVpc {
 	vpc := awsec2.Vpc_FromLookup(scope, id, &awsec2.VpcLookupOptions{
-		VpcId: jsii.String(props.VpcId),
+		VpcId: jsii.String(props.Id),
 	})
 	return vpc
 }
