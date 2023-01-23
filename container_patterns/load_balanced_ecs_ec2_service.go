@@ -3,6 +3,7 @@ package containerpatterns
 import (
 	"strconv"
 
+	"github.com/Breezeware-Technologies/breezeware-aws-cdk-patterns/network"
 	breezewarenetwork "github.com/Breezeware-Technologies/breezeware-aws-cdk-patterns/network"
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	ec2 "github.com/aws/aws-cdk-go/awscdk/v2/awsec2"
@@ -551,7 +552,7 @@ func setupContianerAwsLogDriver(logGroup cloudwatchlogs.ILogGroup, prefix string
 	return logDriver
 }
 
-func lookupVpc(scope constructs.Construct, id *string, props *VpcProps) ec2.IVpc {
+func lookupVpc(scope constructs.Construct, id *string, props *network.VpcProps) ec2.IVpc {
 	vpc := ec2.Vpc_FromLookup(scope, jsii.String("Vpc"), &ec2.VpcLookupOptions{
 		VpcId:     jsii.String(props.Id),
 		IsDefault: jsii.Bool(props.IsDefault),
