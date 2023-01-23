@@ -60,14 +60,10 @@ type LoadBalancedEc2ServiceProps struct {
 	IsServiceDiscoveryEnabled  bool
 	ServiceDiscovery           ServiceDiscoveryProps
 	RoutePriority              float64
-	// Host                       string
-	// RoutePath                  string
-	// RoutePort                  float64
-	// RouteName                  string
-	IsLoadBalancerEnabled     bool
-	LoadBalancer              LoadBalancerProps
-	LoadBalancerListener      LoadBalancerListenerProps
-	LoadBalancerTargetOptions ecs.LoadBalancerTargetOptions
+	IsLoadBalancerEnabled      bool
+	LoadBalancer               LoadBalancerProps
+	LoadBalancerListener       LoadBalancerListenerProps
+	LoadBalancerTargetOptions  ecs.LoadBalancerTargetOptions
 }
 
 type ClusterProps struct {
