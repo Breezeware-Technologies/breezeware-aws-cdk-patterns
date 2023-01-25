@@ -1,0 +1,69 @@
+package containerpatterns
+
+import (
+	breezewarenetwork "github.com/Breezeware-Technologies/breezeware-aws-cdk-patterns/network"
+
+	"github.com/aws/aws-cdk-go/awscdk/v2"
+	ec2 "github.com/aws/aws-cdk-go/awscdk/v2/awsec2"
+	"github.com/aws/constructs-go/constructs/v10"
+	"github.com/aws/jsii-runtime-go"
+)
+
+type EcsDeploymentProps struct {
+	VpcProps                    breezewarenetwork.VpcProps
+	ContainerComputeProps       EcsComputeProps
+	LoadBalancedEc2ServiceProps []LoadBalancedEc2ServiceProps
+}
+
+type ecsDeployment struct {
+	constructs.Construct
+	containerCompute        ContainerCompute
+	loadBalancedEc2Services []LoadBalancedEc2Service
+}
+
+type EcsDeployment interface {
+	ContainerCompute() ContainerCompute
+	LoadBalancedEc2Services() []LoadBalancedEc2Service
+}
+
+func (s *ecsDeployment) ContainerCompute() ContainerCompute {
+	return s.containerCompute
+}
+
+func (s *ecsDeployment) LoadBalancedEc2Service() []LoadBalancedEc2Service {
+	return s.loadBalancedEc2Services
+}
+
+func NewEcsDeployment(scope constructs.Construct, id *string, props *EcsDeploymentProps) EcsDeployment {
+	this := constructs.NewConstruct(scope, id)
+
+	networkStack := awscdk.NewNestedStack(this, jsii.String(""), &awscdk.NestedStackProps{})
+	vpc := ec2.Vpc_FromLookup(networkStack, jsii.String("Vpc"), &ec2.VpcLookupOptions{
+		IsDefault: &props.VpcProps.IsDefault,
+		VpcId:     &props.VpcProps.Id,
+	})
+	awscdk.NewCfnOutput(networkStack, jsii.String(""), &awscdk.CfnOutputProps{
+		Value:      vpc.VpcId(),
+		ExportName: jsii.String("Vpc"),
+	})
+
+	var containerCompute ContainerCompute = NewContainerCompute(networkStack, jsii.String(""), &props.ContainerComputeProps)
+	clusterName := containerCompute.Cluster().ClusterName()
+	vpc := awscdk.Fn_GetAtt("Vpc", id)
+	// containerCompute.Vpc()
+	// containerCompute.Cluster().CapacityProviders()
+	cloudmapNamespaceArn := containerCompute.CloudMapNamespace().NamespaceArn()
+	cloudmapNamespaceName := containerCompute.CloudMapNamespace().NamespaceName()
+	cloudmapNamespaceId := containerCompute.CloudMapNamespace().NamespaceId()
+
+	loadBalancerListenerArn := containerCompute.HttpsListener().ListenerArn()
+	// loadBalancerSecurityGroup := containerCompute.LoadBalancer().SecurityGroups()
+	// containerCompute.EnvironmentFileBucket()
+
+	for _, lbec2Service := range props.LoadBalancedEc2ServiceProps {
+
+		var loadBalancedEc2Service LoadBalancedEc2Service = NewLoadBalancedEc2Service(this, jsii.String(""), &lbec2Service)
+	}
+
+	return &ecsDeployment{this, containerCompute, loadBalancedEc2Service}
+}

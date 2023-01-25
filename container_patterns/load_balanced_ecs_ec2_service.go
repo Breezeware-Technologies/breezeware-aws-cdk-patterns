@@ -3,8 +3,9 @@ package containerpatterns
 import (
 	"strconv"
 
-	breezewarenetwork "github.com/Breezeware-Technologies/breezeware-aws-cdk-patterns/network"
-	"github.com/aws/aws-cdk-go/awscdk/v2"
+	//	brznetwork "breezeware-aws-cdk-patterns-samples/network"
+	brznetwork "github.com/Breezeware-Technologies/breezeware-aws-cdk-patterns/network"
+	core "github.com/aws/aws-cdk-go/awscdk/v2"
 	ec2 "github.com/aws/aws-cdk-go/awscdk/v2/awsec2"
 	ecr "github.com/aws/aws-cdk-go/awscdk/v2/awsecr"
 	ecs "github.com/aws/aws-cdk-go/awscdk/v2/awsecs"
@@ -59,16 +60,15 @@ type LoadBalancedEc2ServiceProps struct {
 	CapacityProviderStrategies []string
 	IsServiceDiscoveryEnabled  bool
 	ServiceDiscovery           ServiceDiscoveryProps
-	RoutePriority              float64
-	IsLoadBalancerEnabled      bool
-	LoadBalancer               LoadBalancerProps
-	LoadBalancerListener       LoadBalancerListenerProps
-	LoadBalancerTargetOptions  ecs.LoadBalancerTargetOptions
+	//	RoutePriority              float64
+	IsLoadBalancerEnabled     bool
+	LoadBalancer              LoadBalancerProps
+	LoadBalancerTargetOptions ecs.LoadBalancerTargetOptions
 }
 
 type ClusterProps struct {
 	ClusterName    string
-	Vpc            breezewarenetwork.VpcProps
+	Vpc            brznetwork.VpcProps
 	SecurityGroups []ec2.ISecurityGroup
 }
 
@@ -108,21 +108,26 @@ type Volume struct {
 }
 
 type ServiceDiscoveryProps struct {
+	ServiceName       string
+	ServicePort       float64
+	CloudMapNamespace CloudMapNamespaceProps
+}
+
+type CloudMapNamespaceProps struct {
 	NamespaceName string
 	NamespaceId   string
 	NamespaceArn  string
-	ServiceName   string
-	ServicePort   float64
 }
 
 type LoadBalancerProps struct {
-	LoadBalancerListenerArn     string
 	LoadBalancerSecurityGroupId string
-	LoadBalancerHealthCheckPath string
+	TargetHealthCheckPath       string
+	ListenerArn                 string
+	ListenerRuleProps           ListenerRuleProps
 }
 
-type LoadBalancerListenerProps struct {
-	RulePriority  float64
+type ListenerRuleProps struct {
+	Priority      float64
 	PathCondition string
 	HostCondition string
 }
@@ -182,7 +187,7 @@ func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *Lo
 	var taskRole iam.Role = nil
 	if taskPolicyDocument != nil {
 		taskRole = iam.NewRole(this, jsii.String("TaskRole"), &iam.RoleProps{
-			AssumedBy: iam.NewServicePrincipal(jsii.String("ecs-tasks."+*awscdk.Aws_URL_SUFFIX()), &iam.ServicePrincipalOpts{}),
+			AssumedBy: iam.NewServicePrincipal(jsii.String("ecs-tasks."+*core.Aws_URL_SUFFIX()), &iam.ServicePrincipalOpts{}),
 			InlinePolicies: &map[string]iam.PolicyDocument{
 				*jsii.String("DefaultPolicy"): taskPolicyDocument,
 			},
@@ -193,7 +198,7 @@ func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *Lo
 		Family:      jsii.String(props.TaskDefinition.FamilyName),
 		NetworkMode: networkMode,
 		ExecutionRole: iam.NewRole(this, jsii.String("ExecutionRole"), &iam.RoleProps{
-			AssumedBy: iam.NewServicePrincipal(jsii.String("ecs-tasks."+*awscdk.Aws_URL_SUFFIX()), &iam.ServicePrincipalOpts{}),
+			AssumedBy: iam.NewServicePrincipal(jsii.String("ecs-tasks."+*core.Aws_URL_SUFFIX()), &iam.ServicePrincipalOpts{}),
 			InlinePolicies: &map[string]iam.PolicyDocument{
 				*jsii.String("DefaultPolicy"): iam.NewPolicyDocument(
 					&iam.PolicyDocumentProps{
@@ -241,7 +246,36 @@ func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *Lo
 		LogGroupName: jsii.String(props.LogGroupName),
 		Retention:    DEFAULT_LOG_RETENTION,
 	})
-	logGroup.ApplyRemovalPolicy(awscdk.RemovalPolicy_DESTROY)
+	logGroup.ApplyRemovalPolicy(core.RemovalPolicy_DESTROY)
+
+	var otelContainerDef ecs.ContainerDefinition = nil
+	if props.IsTracingEnabled {
+		otelContainerDef = ecs.NewContainerDefinition(scope, jsii.String("OtelContainerDefinition"), &ecs.ContainerDefinitionProps{
+			TaskDefinition: taskDef,
+			ContainerName:  jsii.String("otel-xray"),
+			Image:          ecs.ContainerImage_FromRegistry(jsii.String(OTEL_CONTAINER_IMAGE), &ecs.RepositoryImageProps{}),
+			Cpu:            jsii.Number(256),
+			MemoryLimitMiB: jsii.Number(256),
+			Logging:        setupContianerAwsLogDriver(logGroup, "otel"),
+			Command: &[]*string{
+				jsii.String("--config=/etc/ecs/ecs-default-config.yaml"),
+			},
+			PortMappings: &[]*ecs.PortMapping{
+				{
+					ContainerPort: jsii.Number(2000),
+					Protocol:      ecs.Protocol_UDP,
+				},
+				{
+					ContainerPort: jsii.Number(4317),
+					Protocol:      ecs.Protocol_TCP,
+				},
+				{
+					ContainerPort: jsii.Number(8125),
+					Protocol:      ecs.Protocol_UDP,
+				},
+			},
+		})
+	}
 
 	for index, containerDef := range props.TaskDefinition.ApplicationContainers {
 		// update task definition with statements providing container the acces to specific environment files in th S3 bucket
@@ -265,6 +299,14 @@ func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *Lo
 			props.IsTracingEnabled,
 		)
 		cd.AddMountPoints(convertContainerVolumeMountPoints(containerDef.VolumeMountPoint)...)
+
+		if props.IsLoadBalancerEnabled && otelContainerDef != nil {
+			cd.AddLink(otelContainerDef, jsii.String("otel-xray"))
+			cd.AddContainerDependencies(&ecs.ContainerDependency{
+				Condition: ecs.ContainerDependencyCondition_START,
+				Container: otelContainerDef,
+			})
+		}
 	}
 
 	var capacityProviderStrategies []*ecs.CapacityProviderStrategy = []*ecs.CapacityProviderStrategy{}
@@ -277,13 +319,14 @@ func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *Lo
 	var cmOpts *ecs.CloudMapOptions = nil
 	if props.IsServiceDiscoveryEnabled {
 		cmOpts = &ecs.CloudMapOptions{
-			DnsTtl:            awscdk.Duration_Minutes(jsii.Number(1)),
+			DnsTtl:            core.Duration_Minutes(jsii.Number(1)),
 			DnsRecordType:     servicediscovery.DnsRecordType_A,
 			ContainerPort:     jsii.Number(props.ServiceDiscovery.ServicePort),
 			Name:              jsii.String(props.ServiceDiscovery.ServiceName),
 			CloudMapNamespace: getCloudMapNamespaceService(this, props.ServiceDiscovery),
 		}
 	}
+
 	ec2Service := ecs.NewEc2Service(this, jsii.String("Ec2Service"), &ecs.Ec2ServiceProps{
 		Cluster: ecs.Cluster_FromClusterAttributes(this, jsii.String("Cluster"), &ecs.ClusterAttributes{
 			ClusterName:    jsii.String(props.Cluster.ClusterName),
@@ -309,8 +352,8 @@ func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *Lo
 			HealthCheck: &elb2.HealthCheck{
 				Enabled:          jsii.Bool(true),
 				HealthyHttpCodes: jsii.String("200"),
-				Path:             jsii.String(props.LoadBalancer.LoadBalancerHealthCheckPath),
-				Interval:         awscdk.Duration_Seconds(jsii.Number(30)),
+				Path:             jsii.String(props.LoadBalancer.TargetHealthCheckPath),
+				Interval:         core.Duration_Seconds(jsii.Number(30)),
 			},
 			TargetType: loadBalancedServiceTargetType,
 			Vpc:        vpc,
@@ -321,15 +364,17 @@ func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *Lo
 		})
 
 		elb2.NewApplicationListenerRule(this, jsii.String("ALBListenerRule"), &elb2.ApplicationListenerRuleProps{
-			Priority: jsii.Number(props.LoadBalancerListener.RulePriority),
+			Priority: jsii.Number(props.LoadBalancer.ListenerRuleProps.Priority),
 			Action:   elb2.ListenerAction_Forward(&[]elb2.IApplicationTargetGroup{ecsServiceTargetGroup}, &elb2.ForwardOptions{}),
 			Conditions: &[]elb2.ListenerCondition{
-				elb2.ListenerCondition_HostHeaders(jsii.Strings(props.LoadBalancerListener.HostCondition)),
-				elb2.ListenerCondition_PathPatterns(jsii.Strings(props.LoadBalancerListener.PathCondition)),
+				elb2.ListenerCondition_HostHeaders(jsii.Strings(props.LoadBalancer.ListenerRuleProps.HostCondition)),
+				elb2.ListenerCondition_PathPatterns(jsii.Strings(props.LoadBalancer.ListenerRuleProps.PathCondition)),
 			},
 			Listener: elb2.ApplicationListener_FromApplicationListenerAttributes(this, jsii.String("ALBListener"), &elb2.ApplicationListenerAttributes{
-				ListenerArn:   jsii.String(props.LoadBalancer.LoadBalancerListenerArn),
-				SecurityGroup: ec2.SecurityGroup_FromLookupById(this, jsii.String("ALBSecurityGroup"), jsii.String(props.LoadBalancer.LoadBalancerSecurityGroupId)),
+				ListenerArn: jsii.String(props.LoadBalancer.ListenerArn),
+				//				SecurityGroup: props.LoadBalancer.LoadBalancerSecurityGroupId,
+				//				SecurityGroup: ec2.SecurityGroup_FromSecurityGroupId(this, jsii.String("ALBSecurityGroup"), jsii.String(props.LoadBalancer.LoadBalancerSecurityGroupId)),
+				SecurityGroup: ec2.SecurityGroup_FromSecurityGroupId(this, jsii.String("ALBSecurityGroup"), jsii.String(props.LoadBalancer.LoadBalancerSecurityGroupId), &ec2.SecurityGroupImportOptions{}),
 			}),
 		})
 	}
@@ -354,47 +399,11 @@ func configureContainerToTaskDefinition(scope constructs.Construct, id string, c
 		PortMappings: convertContainerPortMappings(containerDef.PortMappings),
 	})
 
-	if tracingEnabled {
-		otelContainerDef := ecs.NewContainerDefinition(scope, jsii.String("OtelContainerDefinition"), &ecs.ContainerDefinitionProps{
-			TaskDefinition: taskDef,
-			ContainerName:  jsii.String("otel-xray"),
-			Image:          ecs.ContainerImage_FromRegistry(jsii.String(OTEL_CONTAINER_IMAGE), &ecs.RepositoryImageProps{}),
-			Cpu:            jsii.Number(256),
-			MemoryLimitMiB: jsii.Number(256),
-			Logging:        setupContianerAwsLogDriver(logGroup, "Otel"),
-			Command: &[]*string{
-				jsii.String("--config=/etc/ecs/ecs-default-config.yaml"),
-			},
-			PortMappings: &[]*ecs.PortMapping{
-				{
-					ContainerPort: jsii.Number(2000),
-					HostPort:      jsii.Number(2000),
-					Protocol:      ecs.Protocol_UDP,
-				},
-				{
-					ContainerPort: jsii.Number(4317),
-					HostPort:      jsii.Number(4317),
-					Protocol:      ecs.Protocol_TCP,
-				},
-				{
-					ContainerPort: jsii.Number(8125),
-					HostPort:      jsii.Number(8125),
-					Protocol:      ecs.Protocol_UDP,
-				},
-			},
-		})
-		cd.AddLink(otelContainerDef, jsii.String("otel-xray"))
-		cd.AddContainerDependencies(&ecs.ContainerDependency{
-			Condition: ecs.ContainerDependencyCondition_START,
-			Container: otelContainerDef,
-		})
-	}
-
 	return cd
 }
 
 func convertContainerCommands(cmds []string) *[]*string {
-	commands := []*string{}
+    var commands []*string
 	for _, cmd := range cmds {
 		commands = append(commands, jsii.String(cmd))
 	}
@@ -438,12 +447,11 @@ func setupContianerAwsLogDriver(logGroup cloudwatchlogs.ILogGroup, prefix string
 	logDriver := ecs.AwsLogDriver_AwsLogs(&ecs.AwsLogDriverProps{
 		LogGroup:     logGroup,
 		StreamPrefix: jsii.String(prefix),
-		// LogRetention: DEFAULT_LOG_RETENTION,
 	})
 	return logDriver
 }
 
-func lookupVpc(scope constructs.Construct, id *string, props *breezewarenetwork.VpcProps) ec2.IVpc {
+func lookupVpc(scope constructs.Construct, id *string, props *brznetwork.VpcProps) ec2.IVpc {
 	vpc := ec2.Vpc_FromLookup(scope, jsii.String("Vpc"), &ec2.VpcLookupOptions{
 		VpcId:     jsii.String(props.Id),
 		IsDefault: jsii.Bool(props.IsDefault),
@@ -466,11 +474,9 @@ func createEnvironmentFileObjectReadOnlyAccessPolicyStatement(bucket string, key
 		&iam.PolicyStatementProps{
 			Effect: iam.Effect_ALLOW,
 			Actions: &[]*string{
-				// jsii.String("s3:GetBucketLocation"),
 				jsii.String("s3:GetObject"),
 			},
 			Resources: &[]*string{
-				// jsii.String(bucket),
 				jsii.String(bucket + "/" + key),
 			},
 		},
@@ -499,9 +505,9 @@ func createTaskContainerDefaultXrayPolciyStatement() iam.PolicyStatement {
 func getCloudMapNamespaceService(scope constructs.Construct, sd ServiceDiscoveryProps) servicediscovery.IPrivateDnsNamespace {
 	privateNamespace := servicediscovery.PrivateDnsNamespace_FromPrivateDnsNamespaceAttributes(
 		scope, jsii.String("CloudMapNamespace"), &servicediscovery.PrivateDnsNamespaceAttributes{
-			NamespaceArn:  jsii.String(sd.NamespaceArn),
-			NamespaceId:   jsii.String(sd.NamespaceId),
-			NamespaceName: jsii.String(sd.NamespaceName),
+			NamespaceArn:  jsii.String(sd.CloudMapNamespace.NamespaceArn),
+			NamespaceId:   jsii.String(sd.CloudMapNamespace.NamespaceId),
+			NamespaceName: jsii.String(sd.CloudMapNamespace.NamespaceName),
 		},
 	)
 	return privateNamespace
