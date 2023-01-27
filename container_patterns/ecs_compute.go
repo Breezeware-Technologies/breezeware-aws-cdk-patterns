@@ -1,9 +1,8 @@
 package containerpatterns
 
 import (
-	//	brznetwork "breezeware-aws-cdk-patterns-samples/network"
-
 	brznetwork "github.com/Breezeware-Technologies/breezeware-aws-cdk-patterns/network"
+	//	brznetwork "breezeware-aws-cdk-patterns-samples/network"
 	core "github.com/aws/aws-cdk-go/awscdk/v2"
 	autoscaling "github.com/aws/aws-cdk-go/awscdk/v2/awsautoscaling"
 	ec2 "github.com/aws/aws-cdk-go/awscdk/v2/awsec2"
@@ -27,7 +26,7 @@ type containerCompute struct {
 	cluster                   ecs.Cluster
 	clusterSecurityGroups     []ec2.ISecurityGroup
 	environmentFileBucket     s3.Bucket
-	loadbalancer              elbv2.IApplicationLoadBalancer
+	loadbalancer              elbv2.ApplicationLoadBalancer
 	loadBalancerSecurityGroup ec2.ISecurityGroup
 	asgCapacityProviders      []ecs.AsgCapacityProvider
 	cloudmapNamespace         servicediscovery.IPrivateDnsNamespace
@@ -38,7 +37,7 @@ type ContainerCompute interface {
 	Cluster() ecs.Cluster
 	ClusterSecurityGroups() []ec2.ISecurityGroup
 	EnvironmentFileBucket() s3.Bucket
-	LoadBalancer() elbv2.IApplicationLoadBalancer
+	LoadBalancer() elbv2.ApplicationLoadBalancer
 	LoadBalancerSecurityGroup() ec2.ISecurityGroup
 	AsgCapacityProviders() []ecs.AsgCapacityProvider
 	CloudMapNamespace() servicediscovery.IPrivateDnsNamespace
@@ -57,7 +56,7 @@ func (cc *containerCompute) EnvironmentFileBucket() s3.Bucket {
 	return cc.environmentFileBucket
 }
 
-func (cc *containerCompute) LoadBalancer() elbv2.IApplicationLoadBalancer {
+func (cc *containerCompute) LoadBalancer() elbv2.ApplicationLoadBalancer {
 	return cc.loadbalancer
 }
 
@@ -165,7 +164,9 @@ func NewContainerCompute(scope constructs.Construct, id *string, props *EcsCompu
 	envFileBucket := s3.NewBucket(this, jsii.String("EnvironmentFileBucket"), &s3.BucketProps{
 		BucketName: jsii.String(props.EnvironmentFileBucket.Name),
 		Versioned:  jsii.Bool(props.EnvironmentFileBucket.IsVersioned),
+		//		AutoDeleteObjects: jsii.Bool(true),
 	})
+	envFileBucket.ApplyRemovalPolicy(core.RemovalPolicy_DESTROY)
 
 	loadBalancer := createLoadBalancer(this, jsii.String("LoadBalanerSetup"), &props.LoadBalancer)
 
@@ -230,7 +231,7 @@ func createLbSecurityGroup(scope constructs.Construct, id *string, props *securi
 	return lbSecurityGroup
 }
 
-func createLoadBalancer(scope constructs.Construct, id *string, props *LoadBalancerOptions) elbv2.IApplicationLoadBalancer {
+func createLoadBalancer(scope constructs.Construct, id *string, props *LoadBalancerOptions) elbv2.ApplicationLoadBalancer {
 
 	loadBalancerSecurityGroup = createLbSecurityGroup(scope, jsii.String(props.Name+"SecurityGroup"), &securityGroupProps{
 		Name:        props.Name + "SecurityGroup",

@@ -52,14 +52,14 @@ const (
 )
 
 type LoadBalancedEc2ServiceProps struct {
-	Cluster                    ClusterProps
-	LogGroupName               string
-	TaskDefinition             TaskDefinition
-	IsTracingEnabled           bool
-	DesiredTaskCount           float64
-	CapacityProviderStrategies []string
-	IsServiceDiscoveryEnabled  bool
-	ServiceDiscovery           ServiceDiscoveryProps
+	Cluster                   ClusterProps
+	LogGroupName              string
+	TaskDefinition            TaskDefinition
+	IsTracingEnabled          bool
+	DesiredTaskCount          float64
+	CapacityProviders         []string
+	IsServiceDiscoveryEnabled bool
+	ServiceDiscovery          ServiceDiscoveryProps
 	//	RoutePriority              float64
 	IsLoadBalancerEnabled     bool
 	LoadBalancer              LoadBalancerProps
@@ -120,10 +120,10 @@ type CloudMapNamespaceProps struct {
 }
 
 type LoadBalancerProps struct {
-	LoadBalancerSecurityGroupId string
-	TargetHealthCheckPath       string
-	ListenerArn                 string
-	ListenerRuleProps           ListenerRuleProps
+	SecurityGroupId       string
+	TargetHealthCheckPath string
+	ListenerArn           string
+	ListenerRuleProps     ListenerRuleProps
 }
 
 type ListenerRuleProps struct {
@@ -174,11 +174,24 @@ func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *Lo
 		}
 	}
 
+	vpc := lookupVpc(this, id, &props.Cluster.Vpc)
+
 	var networkMode ecs.NetworkMode = DEFAULT_TASK_DEFINITION_NETWORK_MODE
 	var loadBalancedServiceTargetType elb2.TargetType = elb2.TargetType_IP
+	var serviceSecurityGroups []ec2.ISecurityGroup = nil
 	if props.TaskDefinition.NetworkMode == TASK_DEFINTION_NETWORK_MODE_AWS_VPC {
+		// task definition network mode configuration
 		networkMode = ecs.NetworkMode_AWS_VPC
+		// load balancer target type configuration
 		loadBalancedServiceTargetType = elb2.TargetType_IP
+		// service security group creation & configuration
+		sg := ec2.NewSecurityGroup(this, jsii.String("ServiceSecurityGroup"), &ec2.SecurityGroupProps{
+			Vpc:              vpc,
+			AllowAllOutbound: jsii.Bool(true),
+		})
+		sg.AddIngressRule(ec2.Peer_AnyIpv4(), ec2.Port_Tcp(jsii.Number(props.ServiceDiscovery.ServicePort)), nil, nil)
+		serviceSecurityGroups = append(serviceSecurityGroups, sg)
+
 	} else if props.TaskDefinition.NetworkMode == TASK_DEFINTION_NETWORK_MODE_BRIDGE {
 		networkMode = ecs.NetworkMode_BRIDGE
 		loadBalancedServiceTargetType = elb2.TargetType_INSTANCE
@@ -300,7 +313,7 @@ func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *Lo
 		)
 		cd.AddMountPoints(convertContainerVolumeMountPoints(containerDef.VolumeMountPoint)...)
 
-		if props.IsLoadBalancerEnabled && otelContainerDef != nil {
+		if props.IsTracingEnabled && otelContainerDef != nil {
 			cd.AddLink(otelContainerDef, jsii.String("otel-xray"))
 			cd.AddContainerDependencies(&ecs.ContainerDependency{
 				Condition: ecs.ContainerDependencyCondition_START,
@@ -309,14 +322,14 @@ func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *Lo
 		}
 	}
 
-	var capacityProviderStrategies []*ecs.CapacityProviderStrategy = []*ecs.CapacityProviderStrategy{}
-	for _, cps := range props.CapacityProviderStrategies {
+	var capacityProviderStrategies []*ecs.CapacityProviderStrategy
+	for _, cps := range props.CapacityProviders {
 		capacityProviderStrategy := createServiceCapacityProviderStrategy(cps)
 		capacityProviderStrategies = append(capacityProviderStrategies, &capacityProviderStrategy)
 	}
 
-	vpc := lookupVpc(this, id, &props.Cluster.Vpc)
 	var cmOpts *ecs.CloudMapOptions = nil
+	//	var serviceSecurityGroups []ec2.ISecurityGroup = []ec2.ISecurityGroup{}
 	if props.IsServiceDiscoveryEnabled {
 		cmOpts = &ecs.CloudMapOptions{
 			DnsTtl:            core.Duration_Minutes(jsii.Number(1)),
@@ -325,9 +338,14 @@ func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *Lo
 			Name:              jsii.String(props.ServiceDiscovery.ServiceName),
 			CloudMapNamespace: getCloudMapNamespaceService(this, props.ServiceDiscovery),
 		}
+		//		sg := ec2.NewSecurityGroup(this, jsii.String("ServiceSecurityGroup"), &ec2.SecurityGroupProps{
+		//			Vpc:              vpc,
+		//			AllowAllOutbound: jsii.Bool(true),
+		//		})
+		//		sg.AddIngressRule(ec2.Peer_AnyIpv4(), ec2.Port_Tcp(jsii.Number(props.ServiceDiscovery.ServicePort)), nil, nil)
+		//		serviceSecurityGroups = append(serviceSecurityGroups, sg)
 	}
-
-	ec2Service := ecs.NewEc2Service(this, jsii.String("Ec2Service"), &ecs.Ec2ServiceProps{
+	ec2ServiceProps := ecs.Ec2ServiceProps{
 		Cluster: ecs.Cluster_FromClusterAttributes(this, jsii.String("Cluster"), &ecs.ClusterAttributes{
 			ClusterName:    jsii.String(props.Cluster.ClusterName),
 			Vpc:            vpc,
@@ -345,7 +363,13 @@ func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *Lo
 		CloudMapOptions:      cmOpts,
 		PropagateTags:        ecs.PropagatedTagSource_SERVICE,
 		EnableECSManagedTags: jsii.Bool(true),
-	})
+		//		SecurityGroups:       &serviceSecurityGroups,
+	}
+	if props.TaskDefinition.NetworkMode == TASK_DEFINTION_NETWORK_MODE_AWS_VPC {
+		ec2ServiceProps.SecurityGroups = &serviceSecurityGroups
+	}
+
+	ec2Service := ecs.NewEc2Service(this, jsii.String("Ec2Service"), &ec2ServiceProps)
 
 	if props.IsLoadBalancerEnabled {
 		ecsServiceTargetGroup := elb2.NewApplicationTargetGroup(this, jsii.String("ApplicationTargetGroup"), &elb2.ApplicationTargetGroupProps{
@@ -372,9 +396,9 @@ func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *Lo
 			},
 			Listener: elb2.ApplicationListener_FromApplicationListenerAttributes(this, jsii.String("ALBListener"), &elb2.ApplicationListenerAttributes{
 				ListenerArn: jsii.String(props.LoadBalancer.ListenerArn),
-				//				SecurityGroup: props.LoadBalancer.LoadBalancerSecurityGroupId,
-				//				SecurityGroup: ec2.SecurityGroup_FromSecurityGroupId(this, jsii.String("ALBSecurityGroup"), jsii.String(props.LoadBalancer.LoadBalancerSecurityGroupId)),
-				SecurityGroup: ec2.SecurityGroup_FromSecurityGroupId(this, jsii.String("ALBSecurityGroup"), jsii.String(props.LoadBalancer.LoadBalancerSecurityGroupId), &ec2.SecurityGroupImportOptions{}),
+				//				SecurityGroup: props.ApplicationLoadBalancer.SecurityGroupId,
+				//				SecurityGroup: ec2.SecurityGroup_FromSecurityGroupId(this, jsii.String("ALBSecurityGroup"), jsii.String(props.ApplicationLoadBalancer.SecurityGroupId)),
+				SecurityGroup: ec2.SecurityGroup_FromSecurityGroupId(this, jsii.String("ALBSecurityGroup"), jsii.String(props.LoadBalancer.SecurityGroupId), &ec2.SecurityGroupImportOptions{}),
 			}),
 		})
 	}
@@ -403,7 +427,7 @@ func configureContainerToTaskDefinition(scope constructs.Construct, id string, c
 }
 
 func convertContainerCommands(cmds []string) *[]*string {
-    var commands []*string
+	var commands []*string
 	for _, cmd := range cmds {
 		commands = append(commands, jsii.String(cmd))
 	}
@@ -411,7 +435,7 @@ func convertContainerCommands(cmds []string) *[]*string {
 }
 
 func convertContainerEntryPointCommands(cmds []string) *[]*string {
-	entryPointCmds := []*string{}
+	var entryPointCmds []*string
 	for _, cmd := range cmds {
 		entryPointCmds = append(entryPointCmds, jsii.String(cmd))
 	}
@@ -419,7 +443,7 @@ func convertContainerEntryPointCommands(cmds []string) *[]*string {
 }
 
 func convertContainerPortMappings(pm []ecs.PortMapping) *[]*ecs.PortMapping {
-	portMapping := []*ecs.PortMapping{}
+	var portMapping []*ecs.PortMapping
 	for _, mapping := range pm {
 		portMapping = append(portMapping, &mapping)
 	}
@@ -428,7 +452,7 @@ func convertContainerPortMappings(pm []ecs.PortMapping) *[]*ecs.PortMapping {
 }
 
 func convertContainerVolumeMountPoints(pm []ecs.MountPoint) []*ecs.MountPoint {
-	mountPoints := []*ecs.MountPoint{}
+	var mountPoints []*ecs.MountPoint
 	for _, mount := range pm {
 		mountPoints = append(mountPoints, &mount)
 	}

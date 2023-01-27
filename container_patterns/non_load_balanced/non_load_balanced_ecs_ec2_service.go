@@ -1,0 +1,479 @@
+package containerpatterns
+
+import (
+	"strconv"
+
+	//	brznetwork "breezeware-aws-cdk-patterns-samples/network"
+	brznetwork "github.com/Breezeware-Technologies/breezeware-aws-cdk-patterns/network"
+	core "github.com/aws/aws-cdk-go/awscdk/v2"
+	ec2 "github.com/aws/aws-cdk-go/awscdk/v2/awsec2"
+	ecr "github.com/aws/aws-cdk-go/awscdk/v2/awsecr"
+	ecs "github.com/aws/aws-cdk-go/awscdk/v2/awsecs"
+	iam "github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
+	cloudwatchlogs "github.com/aws/aws-cdk-go/awscdk/v2/awslogs"
+	s3 "github.com/aws/aws-cdk-go/awscdk/v2/awss3"
+	servicediscovery "github.com/aws/aws-cdk-go/awscdk/v2/awsservicediscovery"
+	"github.com/aws/constructs-go/constructs/v10"
+	"github.com/aws/jsii-runtime-go"
+)
+
+// custom types
+type (
+	Networkmode  string
+	RegistryType string
+)
+
+// constants
+const (
+	DEFAULT_LOG_RETENTION        cloudwatchlogs.RetentionDays = cloudwatchlogs.RetentionDays_TWO_WEEKS
+	DEFAULT_DOCKER_VOLUME_DRIVER string                       = "rexray/ebs"
+	DEFAULT_DOCKER_VOLUME_TYPE   string                       = "gp2"
+	OTEL_CONTAINER_IMAGE         string                       = "amazon/aws-otel-collector:v0.25.0"
+)
+
+const (
+	TASK_DEFINTION_NETWORK_MODE_BRIDGE   Networkmode     = "BRIDGE"
+	TASK_DEFINTION_NETWORK_MODE_AWS_VPC  Networkmode     = "AWS_VPC"
+	DEFAULT_TASK_DEFINITION_NETWORK_MODE ecs.NetworkMode = ecs.NetworkMode_BRIDGE
+)
+
+const (
+	CONTAINER_DEFINITION_REGISTRY_AWS_ECR RegistryType = "ECR"
+	CONTAINER_DEFINITION_REGISTRY_OTHERS  RegistryType = "OTHERS"
+	//	DEFAULT_CONTAINER_DEFINITION_REGISTRY RegistryType = CONTAINER_DEFINITION_REGISTRY_AWS_ECR
+)
+
+type NonLoadBalancedEc2ServiceProps struct {
+	Cluster                   ClusterProps
+	LogGroupName              string
+	TaskDefinition            TaskDefinition
+	IsTracingEnabled          bool
+	DesiredTaskCount          float64
+	CapacityProviders         []string
+	IsServiceDiscoveryEnabled bool
+	ServiceDiscovery          ServiceDiscoveryProps
+}
+
+type ClusterProps struct {
+	ClusterName    string
+	Vpc            brznetwork.VpcProps
+	SecurityGroups []ec2.ISecurityGroup
+}
+
+type TaskDefinition struct {
+	FamilyName            string
+	NetworkMode           Networkmode
+	EnvironmentFile       EnvironmentFile
+	TaskPolicy            iam.PolicyDocument
+	ApplicationContainers []ContainerDefinition
+	RequiresVolume        bool
+	Volumes               []Volume
+}
+
+type EnvironmentFile struct {
+	BucketName string
+	BucketArn  string
+}
+
+type ContainerDefinition struct {
+	ContainerName            string
+	Image                    string
+	RegistryType             RegistryType
+	ImageTag                 string
+	IsEssential              bool
+	Commands                 []string
+	EntryPointCommands       []string
+	Cpu                      float64
+	Memory                   float64
+	PortMappings             []ecs.PortMapping
+	EnvironmentFileObjectKey string
+	VolumeMountPoint         []ecs.MountPoint
+}
+
+type Volume struct {
+	Name string
+	Size string
+}
+
+type ServiceDiscoveryProps struct {
+	ServiceName       string
+	ServicePort       float64
+	CloudMapNamespace CloudMapNamespaceProps
+}
+
+type CloudMapNamespaceProps struct {
+	NamespaceName string
+	NamespaceId   string
+	NamespaceArn  string
+}
+
+type nonLoadBalancedEc2Service struct {
+	constructs.Construct
+	logGroup   cloudwatchlogs.LogGroup
+	ec2Service ecs.Ec2Service
+}
+
+type NonLoadBalancedEc2Service interface {
+	LogGroup() cloudwatchlogs.LogGroup
+	Service() ecs.Ec2Service
+}
+
+func (s *nonLoadBalancedEc2Service) Service() ecs.Ec2Service {
+	return s.ec2Service
+}
+
+func (s *nonLoadBalancedEc2Service) LogGroup() cloudwatchlogs.LogGroup {
+	return s.logGroup
+}
+
+func NewNonLoadBalancedEc2Service(scope constructs.Construct, id *string, props *NonLoadBalancedEc2ServiceProps) NonLoadBalancedEc2Service {
+	this := constructs.NewConstruct(scope, id)
+
+	var taskPolicyDocument iam.PolicyDocument = nil
+	if props.TaskDefinition.TaskPolicy != nil {
+
+		taskPolicyDocument = props.TaskDefinition.TaskPolicy
+		if props.IsTracingEnabled {
+			taskPolicyDocument.AddStatements(
+				createTaskContainerDefaultXrayPolciyStatement(),
+			)
+		}
+	} else {
+		if props.IsTracingEnabled {
+			taskPolicyDocument = iam.NewPolicyDocument(&iam.PolicyDocumentProps{
+				AssignSids: jsii.Bool(true),
+				Statements: &[]iam.PolicyStatement{
+					createTaskContainerDefaultXrayPolciyStatement(),
+				},
+			})
+		}
+	}
+
+	vpc := lookupVpc(this, id, &props.Cluster.Vpc)
+
+	var networkMode ecs.NetworkMode = DEFAULT_TASK_DEFINITION_NETWORK_MODE
+	var serviceSecurityGroups []ec2.ISecurityGroup = nil
+	if props.TaskDefinition.NetworkMode == TASK_DEFINTION_NETWORK_MODE_AWS_VPC {
+		// task definition network mode configuration
+		networkMode = ecs.NetworkMode_AWS_VPC
+		// service security group creation & configuration
+		sg := ec2.NewSecurityGroup(this, jsii.String("ServiceSecurityGroup"), &ec2.SecurityGroupProps{
+			Vpc:              vpc,
+			AllowAllOutbound: jsii.Bool(true),
+		})
+		sg.AddIngressRule(ec2.Peer_AnyIpv4(), ec2.Port_Tcp(jsii.Number(props.ServiceDiscovery.ServicePort)), nil, nil)
+		serviceSecurityGroups = append(serviceSecurityGroups, sg)
+	} else if props.TaskDefinition.NetworkMode == TASK_DEFINTION_NETWORK_MODE_BRIDGE {
+		networkMode = ecs.NetworkMode_BRIDGE
+	}
+
+	var taskRole iam.Role = nil
+	if taskPolicyDocument != nil {
+		taskRole = iam.NewRole(this, jsii.String("TaskRole"), &iam.RoleProps{
+			AssumedBy: iam.NewServicePrincipal(jsii.String("ecs-tasks."+*core.Aws_URL_SUFFIX()), &iam.ServicePrincipalOpts{}),
+			InlinePolicies: &map[string]iam.PolicyDocument{
+				*jsii.String("DefaultPolicy"): taskPolicyDocument,
+			},
+		})
+	}
+
+	taskDef := ecs.NewEc2TaskDefinition(this, jsii.String("Ec2TaskDefinition"), &ecs.Ec2TaskDefinitionProps{
+		Family:      jsii.String(props.TaskDefinition.FamilyName),
+		NetworkMode: networkMode,
+		ExecutionRole: iam.NewRole(this, jsii.String("ExecutionRole"), &iam.RoleProps{
+			AssumedBy: iam.NewServicePrincipal(jsii.String("ecs-tasks."+*core.Aws_URL_SUFFIX()), &iam.ServicePrincipalOpts{}),
+			InlinePolicies: &map[string]iam.PolicyDocument{
+				*jsii.String("DefaultPolicy"): iam.NewPolicyDocument(
+					&iam.PolicyDocumentProps{
+						AssignSids: jsii.Bool(true),
+						Statements: &[]iam.PolicyStatement{
+							iam.NewPolicyStatement(
+								&iam.PolicyStatementProps{
+									Actions: &[]*string{
+										jsii.String("s3:GetBucketLocation"),
+									},
+									Effect: iam.Effect_ALLOW,
+									Resources: &[]*string{
+										&props.TaskDefinition.EnvironmentFile.BucketArn,
+									},
+								},
+							),
+						},
+					},
+				),
+			},
+		}),
+		TaskRole: taskRole,
+	})
+
+	if props.TaskDefinition.RequiresVolume {
+		for _, volume := range props.TaskDefinition.Volumes {
+			var vol ecs.Volume = ecs.Volume{
+				Name: jsii.String(volume.Name),
+				DockerVolumeConfiguration: &ecs.DockerVolumeConfiguration{
+					Driver:        jsii.String(DEFAULT_DOCKER_VOLUME_DRIVER),
+					Scope:         ecs.Scope_SHARED,
+					Autoprovision: jsii.Bool(true),
+					DriverOpts: &map[string]*string{
+						"volumetype": jsii.String(DEFAULT_DOCKER_VOLUME_TYPE),
+						"size":       jsii.String(volume.Size),
+					},
+				},
+			}
+			taskDef.AddVolume(&vol)
+		}
+	}
+
+	// Creates a CloudWatch Log Group for each service
+	logGroup := cloudwatchlogs.NewLogGroup(this, jsii.String("LogGroup"), &cloudwatchlogs.LogGroupProps{
+		LogGroupName: jsii.String(props.LogGroupName),
+		Retention:    DEFAULT_LOG_RETENTION,
+	})
+	logGroup.ApplyRemovalPolicy(core.RemovalPolicy_DESTROY)
+
+	var otelContainerDef ecs.ContainerDefinition = nil
+	if props.IsTracingEnabled {
+		otelContainerDef = ecs.NewContainerDefinition(scope, jsii.String("OtelContainerDefinition"), &ecs.ContainerDefinitionProps{
+			TaskDefinition: taskDef,
+			ContainerName:  jsii.String("otel-xray"),
+			Image:          ecs.ContainerImage_FromRegistry(jsii.String(OTEL_CONTAINER_IMAGE), &ecs.RepositoryImageProps{}),
+			Cpu:            jsii.Number(256),
+			MemoryLimitMiB: jsii.Number(256),
+			Logging:        setupContianerAwsLogDriver(logGroup, "otel"),
+			Command: &[]*string{
+				jsii.String("--config=/etc/ecs/ecs-default-config.yaml"),
+			},
+			PortMappings: &[]*ecs.PortMapping{
+				{
+					ContainerPort: jsii.Number(2000),
+					Protocol:      ecs.Protocol_UDP,
+				},
+				{
+					ContainerPort: jsii.Number(4317),
+					Protocol:      ecs.Protocol_TCP,
+				},
+				{
+					ContainerPort: jsii.Number(8125),
+					Protocol:      ecs.Protocol_UDP,
+				},
+			},
+		})
+	}
+
+	for index, containerDef := range props.TaskDefinition.ApplicationContainers {
+		// update task definition with statements providing container the acces to specific environment files in th S3 bucket
+		taskDef.AddToExecutionRolePolicy(
+			createEnvironmentFileObjectReadOnlyAccessPolicyStatement(
+				props.TaskDefinition.EnvironmentFile.BucketArn,
+				containerDef.EnvironmentFileObjectKey),
+		)
+		// creates container definition for the task definition
+		cd := configureContainerToTaskDefinition(
+			this,
+			"Container"+strconv.FormatInt(int64(index), 10),
+			containerDef,
+			taskDef,
+			s3.Bucket_FromBucketName(
+				this,
+				jsii.String("EnvironmentFileBucket"),
+				jsii.String(props.TaskDefinition.EnvironmentFile.BucketName),
+			),
+			logGroup,
+			props.IsTracingEnabled,
+		)
+		if props.TaskDefinition.RequiresVolume {
+			cd.AddMountPoints(convertContainerVolumeMountPoints(containerDef.VolumeMountPoint)...)
+		}
+
+		if props.IsTracingEnabled && props.TaskDefinition.NetworkMode == TASK_DEFINTION_NETWORK_MODE_BRIDGE && otelContainerDef != nil {
+			cd.AddLink(otelContainerDef, jsii.String("otel-xray"))
+			cd.AddContainerDependencies(&ecs.ContainerDependency{
+				Condition: ecs.ContainerDependencyCondition_START,
+				Container: otelContainerDef,
+			})
+		}
+	}
+
+	var capacityProviderStrategies []*ecs.CapacityProviderStrategy
+	for _, cps := range props.CapacityProviders {
+		capacityProviderStrategy := createServiceCapacityProviderStrategy(cps)
+		capacityProviderStrategies = append(capacityProviderStrategies, &capacityProviderStrategy)
+	}
+
+	//	vpc := lookupVpc(this, id, &props.Cluster.Vpc)
+	var cmOpts *ecs.CloudMapOptions = nil
+	//	var serviceSecurityGroups []ec2.ISecurityGroup = []ec2.ISecurityGroup{}
+	if props.IsServiceDiscoveryEnabled {
+		cmOpts = &ecs.CloudMapOptions{
+			DnsTtl:            core.Duration_Minutes(jsii.Number(1)),
+			DnsRecordType:     servicediscovery.DnsRecordType_A,
+			ContainerPort:     jsii.Number(props.ServiceDiscovery.ServicePort),
+			Name:              jsii.String(props.ServiceDiscovery.ServiceName),
+			CloudMapNamespace: getCloudMapNamespaceService(this, props.ServiceDiscovery),
+		}
+		//		sg := ec2.NewSecurityGroup(this, jsii.String("ServiceSecurityGroup"), &ec2.SecurityGroupProps{
+		//			Vpc:              vpc,
+		//			AllowAllOutbound: jsii.Bool(true),
+		//		})
+		//		sg.AddIngressRule(ec2.Peer_AnyIpv4(), ec2.Port_Tcp(jsii.Number(props.ServiceDiscovery.ServicePort)), nil, nil)
+		//		serviceSecurityGroups = append(serviceSecurityGroups, sg)
+	}
+
+	ec2ServiceProps := ecs.Ec2ServiceProps{
+		Cluster: ecs.Cluster_FromClusterAttributes(this, jsii.String("Cluster"), &ecs.ClusterAttributes{
+			ClusterName:    jsii.String(props.Cluster.ClusterName),
+			Vpc:            vpc,
+			SecurityGroups: &props.Cluster.SecurityGroups,
+		}),
+		CapacityProviderStrategies: &capacityProviderStrategies,
+		TaskDefinition:             taskDef,
+		DesiredCount:               &props.DesiredTaskCount,
+		CircuitBreaker: &ecs.DeploymentCircuitBreaker{
+			Rollback: jsii.Bool(true),
+		},
+		PlacementStrategies: &[]ecs.PlacementStrategy{
+			ecs.PlacementStrategy_PackedByMemory(),
+		},
+		CloudMapOptions:      cmOpts,
+		PropagateTags:        ecs.PropagatedTagSource_SERVICE,
+		EnableECSManagedTags: jsii.Bool(true),
+		SecurityGroups:       &serviceSecurityGroups,
+	}
+	if props.TaskDefinition.NetworkMode == TASK_DEFINTION_NETWORK_MODE_AWS_VPC {
+		ec2ServiceProps.SecurityGroups = &serviceSecurityGroups
+	}
+
+	ec2Service := ecs.NewEc2Service(this, jsii.String("Ec2Service"), &ec2ServiceProps)
+	return &nonLoadBalancedEc2Service{this, logGroup, ec2Service}
+}
+
+func configureContainerToTaskDefinition(scope constructs.Construct, id string, containerDef ContainerDefinition, taskDef ecs.TaskDefinition, taskDefEnvFileBucket s3.IBucket, logGroup cloudwatchlogs.ILogGroup, tracingEnabled bool) ecs.ContainerDefinition {
+	cd := ecs.NewContainerDefinition(scope, jsii.String(id), &ecs.ContainerDefinitionProps{
+		TaskDefinition: taskDef,
+		ContainerName:  &containerDef.ContainerName,
+		Command:        convertContainerCommands(containerDef.Commands),
+		EntryPoint:     convertContainerEntryPointCommands(containerDef.EntryPointCommands),
+		Essential:      jsii.Bool(containerDef.IsEssential),
+		Image:          configureContainerImage(scope, containerDef.RegistryType, containerDef.Image, containerDef.ImageTag),
+		Cpu:            jsii.Number(containerDef.Cpu),
+		MemoryLimitMiB: jsii.Number(containerDef.Memory),
+		EnvironmentFiles: &[]ecs.EnvironmentFile{
+			ecs.AssetEnvironmentFile_FromBucket(taskDefEnvFileBucket, jsii.String(containerDef.EnvironmentFileObjectKey), nil),
+		},
+		Logging:      setupContianerAwsLogDriver(logGroup, containerDef.ContainerName),
+		PortMappings: convertContainerPortMappings(containerDef.PortMappings),
+	})
+
+	return cd
+}
+
+func convertContainerCommands(cmds []string) *[]*string {
+	var commands []*string
+	for _, cmd := range cmds {
+		commands = append(commands, jsii.String(cmd))
+	}
+	return &commands
+}
+
+func convertContainerEntryPointCommands(cmds []string) *[]*string {
+	var entryPointCmds []*string
+	for _, cmd := range cmds {
+		entryPointCmds = append(entryPointCmds, jsii.String(cmd))
+	}
+	return &entryPointCmds
+}
+
+func convertContainerPortMappings(pm []ecs.PortMapping) *[]*ecs.PortMapping {
+	var portMapping []*ecs.PortMapping
+	for _, mapping := range pm {
+		portMapping = append(portMapping, &mapping)
+	}
+	return &portMapping
+
+}
+
+func convertContainerVolumeMountPoints(pm []ecs.MountPoint) []*ecs.MountPoint {
+	var mountPoints []*ecs.MountPoint
+	for _, mount := range pm {
+		mountPoints = append(mountPoints, &mount)
+	}
+	return mountPoints
+}
+
+func configureContainerImage(scope constructs.Construct, registryType RegistryType, image string, tag string) ecs.ContainerImage {
+	if registryType == CONTAINER_DEFINITION_REGISTRY_AWS_ECR {
+		return ecs.ContainerImage_FromEcrRepository(ecr.Repository_FromRepositoryName(scope, jsii.String("EcrRepository"), jsii.String(image)), jsii.String(tag))
+	} else {
+		return ecs.ContainerImage_FromRegistry(jsii.String(image+":"+tag), &ecs.RepositoryImageProps{})
+	}
+}
+
+func setupContianerAwsLogDriver(logGroup cloudwatchlogs.ILogGroup, prefix string) ecs.LogDriver {
+	logDriver := ecs.AwsLogDriver_AwsLogs(&ecs.AwsLogDriverProps{
+		LogGroup:     logGroup,
+		StreamPrefix: jsii.String(prefix),
+	})
+	return logDriver
+}
+
+func lookupVpc(scope constructs.Construct, id *string, props *brznetwork.VpcProps) ec2.IVpc {
+	vpc := ec2.Vpc_FromLookup(scope, jsii.String("Vpc"), &ec2.VpcLookupOptions{
+		VpcId:     jsii.String(props.Id),
+		IsDefault: jsii.Bool(props.IsDefault),
+	})
+	return vpc
+}
+
+func createServiceCapacityProviderStrategy(name string) ecs.CapacityProviderStrategy {
+	capacityProviderStrategy := ecs.CapacityProviderStrategy{
+		CapacityProvider: jsii.String(name),
+		Weight:           jsii.Number(1),
+	}
+
+	return capacityProviderStrategy
+}
+
+func createEnvironmentFileObjectReadOnlyAccessPolicyStatement(bucket string, key string) iam.PolicyStatement {
+
+	policy := iam.NewPolicyStatement(
+		&iam.PolicyStatementProps{
+			Effect: iam.Effect_ALLOW,
+			Actions: &[]*string{
+				jsii.String("s3:GetObject"),
+			},
+			Resources: &[]*string{
+				jsii.String(bucket + "/" + key),
+			},
+		},
+	)
+
+	return policy
+}
+
+func createTaskContainerDefaultXrayPolciyStatement() iam.PolicyStatement {
+	policy := iam.NewPolicyStatement(&iam.PolicyStatementProps{
+		Actions: &[]*string{
+			jsii.String("xray:GetSamplingRules"),
+			jsii.String("xray:GetSamplingStatisticSummaries"),
+			jsii.String("xray:GetSamplingTargets"),
+			jsii.String("xray:PutTelemetryRecords"),
+			jsii.String("xray:PutTraceSegments"),
+		},
+		Effect: iam.Effect_ALLOW,
+		// TODO: update resource section for OTEL policy
+		Resources: &[]*string{jsii.String("*")},
+	})
+
+	return policy
+}
+
+func getCloudMapNamespaceService(scope constructs.Construct, sd ServiceDiscoveryProps) servicediscovery.IPrivateDnsNamespace {
+	privateNamespace := servicediscovery.PrivateDnsNamespace_FromPrivateDnsNamespaceAttributes(
+		scope, jsii.String("CloudMapNamespace"), &servicediscovery.PrivateDnsNamespaceAttributes{
+			NamespaceArn:  jsii.String(sd.CloudMapNamespace.NamespaceArn),
+			NamespaceId:   jsii.String(sd.CloudMapNamespace.NamespaceId),
+			NamespaceName: jsii.String(sd.CloudMapNamespace.NamespaceName),
+		},
+	)
+	return privateNamespace
+}

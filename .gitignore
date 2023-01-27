@@ -1,1 +1,5 @@
 .fleet
+.vscode
+.idea
+cdk.context.*
+cdk.out
