@@ -36,7 +36,7 @@ type ecsProject struct {
 	applicationLoadBalancer         elb2.ApplicationLoadBalancer
 	ec2ContainerApplicationServices []ecs.Ec2Service
 }
-
+	
 type EcsProject interface {
 	Network() ec2.IVpc
 	Compute() ecs.Cluster
@@ -360,8 +360,10 @@ func NewEcsProject(scope constructs.Construct, id *string, props *EcsProjectProp
 		loadBalancedServicesStack := core.NewNestedStack(computeStack, jsii.String("LoadBalancedEc2ContainerApplicationServicesStack"), &core.NestedStackProps{
 			Description: jsii.String("Cloudformation stack for handling Load Balanced ECS EC2Service(s) (applications)"),
 		})
-		// waits for non load-balanced applications stack creation to complete
-		loadBalancedServicesStack.AddDependency(nonLoadBalancedServicesStack, jsii.String("Wait for non load-balanced applications to start before starting the load balanced applications"))
+		if len(props.NonLoadBalancedEc2ServicesProps) > 0 {
+			// waits for non load-balanced applications stack creation to complete
+			loadBalancedServicesStack.AddDependency(nonLoadBalancedServicesStack, jsii.String("Wait for non load-balanced applications to start before starting the load balanced applications"))
+		}
 
 		for index, lbEc2ServiceProps := range props.LoadBalancedEc2ServicesProps {
 
