@@ -51,19 +51,19 @@ const (
 	DEFAULT_LOAD_BALANCER_TARGET_PROTOCOL ecs.Protocol               = ecs.Protocol_TCP
 )
 
+// LoadBalancedEc2ServiceProps represents the properties that are needed to create a load-balanced EC2 Service inside ECS
 type LoadBalancedEc2ServiceProps struct {
-	Cluster                   ClusterProps
-	LogGroupName              string
-	TaskDefinition            TaskDefinition
-	IsTracingEnabled          bool
-	DesiredTaskCount          float64
-	CapacityProviders         []string
-	IsServiceDiscoveryEnabled bool
-	ServiceDiscovery          ServiceDiscoveryProps
-	//	RoutePriority              float64
-	IsLoadBalancerEnabled     bool
-	LoadBalancer              LoadBalancerProps
-	LoadBalancerTargetOptions ecs.LoadBalancerTargetOptions
+	Cluster                   ClusterProps                  // Cluster properties
+	LogGroupName              string                        // LogGroup name
+	TaskDefinition            TaskDefinition                // TaskDefinition for EC2 service
+	IsTracingEnabled          bool                          // flag for EC2 service tracing
+	DesiredTaskCount          float64                       // number of task count that is desired to run inside the EC2 service
+	CapacityProviders         []string                      // slice of CapacityProvider names
+	IsServiceDiscoveryEnabled bool                          // flag for EC2 service discovery
+	ServiceDiscovery          ServiceDiscoveryProps         // ServiceDiscovery properties
+	IsLoadBalancerEnabled     bool                          // flag for EC2 Service load-balancing
+	LoadBalancer              LoadBalancerProps             // LoadBalancer properties
+	LoadBalancerTargetOptions ecs.LoadBalancerTargetOptions // LoadBalancerTarget options
 }
 
 type ClusterProps struct {
@@ -151,6 +151,7 @@ func (s *loadBalancedEc2Service) LogGroup() cloudwatchlogs.LogGroup {
 	return s.logGroup
 }
 
+// Creates a new ECS EC2 Service under a Load-Balancer
 func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *LoadBalancedEc2ServiceProps) LoadBalancedEc2Service {
 	this := constructs.NewConstruct(scope, id)
 
@@ -342,7 +343,7 @@ func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *Lo
 		//			Vpc:              vpc,
 		//			AllowAllOutbound: jsii.Bool(true),
 		//		})
-		//		sg.AddIngressRule(ec2.Peer_AnyIpv4(), ec2.Port_Tcp(jsii.Number(props.ServiceDiscovery.ServicePort)), nil, nil)
+		//		sg.AddIngressRule(ec2.Peer_AnyIpv4(), ec2.Port_Tcp(jsii.Number(loadBalancedEc2ServiceProps.ServiceDiscovery.ServicePort)), nil, nil)
 		//		serviceSecurityGroups = append(serviceSecurityGroups, sg)
 	}
 	ec2ServiceProps := ecs.Ec2ServiceProps{
@@ -396,8 +397,6 @@ func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *Lo
 			},
 			Listener: elb2.ApplicationListener_FromApplicationListenerAttributes(this, jsii.String("ALBListener"), &elb2.ApplicationListenerAttributes{
 				ListenerArn: jsii.String(props.LoadBalancer.ListenerArn),
-				//				SecurityGroup: props.ApplicationLoadBalancer.SecurityGroupId,
-				//				SecurityGroup: ec2.SecurityGroup_FromSecurityGroupId(this, jsii.String("ALBSecurityGroup"), jsii.String(props.ApplicationLoadBalancer.SecurityGroupId)),
 				SecurityGroup: ec2.SecurityGroup_FromSecurityGroupId(this, jsii.String("ALBSecurityGroup"), jsii.String(props.LoadBalancer.SecurityGroupId), &ec2.SecurityGroupImportOptions{}),
 			}),
 		})
