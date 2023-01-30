@@ -1,26 +1,26 @@
+/*
+Package containerpatterns provides AWS CDK v2 Level 3 constructs/patterns for creating container based applications.
+[asdsa]
+
+[asdsa] https://localhost:80 :
+ adghjd
+*/
 package containerpatterns
 
 import (
 	brzLbEc2Service "github.com/Breezeware-Technologies/breezeware-aws-cdk-patterns/container_patterns/load_balanced"
 	brzNlbEc2Service "github.com/Breezeware-Technologies/breezeware-aws-cdk-patterns/container_patterns/non_load_balanced"
 	brznetwork "github.com/Breezeware-Technologies/breezeware-aws-cdk-patterns/network"
-	//	brzLbEc2Service "breezeware-aws-cdk-patterns-samples/container_patterns/load_balanced"
-	//	brzNlbEc2Service "breezeware-aws-cdk-patterns-samples/container_patterns/non_load_balanced"
-	//	brznetwork "breezeware-aws-cdk-patterns-samples/network"
 	core "github.com/aws/aws-cdk-go/awscdk/v2"
 	ec2 "github.com/aws/aws-cdk-go/awscdk/v2/awsec2"
 	ecs "github.com/aws/aws-cdk-go/awscdk/v2/awsecs"
 	elb2 "github.com/aws/aws-cdk-go/awscdk/v2/awselasticloadbalancingv2"
-	//	"log"
-
-	//	iam "github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
-	//	"github.com/aws/aws-cdk-go/awscdk/v2/awss3"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 	"strconv"
 )
 
-// EcsProjectProps properties for creating a EcsProject
+// EcsProjectProps represents properties for creating an EcsProject
 type EcsProjectProps struct {
 	NetworkProps                    brznetwork.VpcProps
 	ComputeProps                    EcsComputeProps
@@ -28,7 +28,7 @@ type EcsProjectProps struct {
 	LoadBalancedEc2ServicesProps    []brzLbEc2Service.LoadBalancedEc2ServiceProps
 }
 
-// EcsProject containing network, compute and relavant ec2ContainerApplicationServices in AWS ECS
+// ecsProject represents a aws cdk construct as a containing network, compute and relavant ec2ContainerApplicationServices in AWS ECS
 type ecsProject struct {
 	constructs.Construct
 	network                         ec2.IVpc
@@ -36,11 +36,16 @@ type ecsProject struct {
 	applicationLoadBalancer         elb2.ApplicationLoadBalancer
 	ec2ContainerApplicationServices []ecs.Ec2Service
 }
-	
+
+// EcsProject interface represents set of methods that can be performed on an ecsProject object
 type EcsProject interface {
+	// Network returns IVpc as the network-working component of the EcsProject.
 	Network() ec2.IVpc
+	// Compute returns Cluster as the container compute environment.
 	Compute() ecs.Cluster
+	// ApplicationLoadBalancer returns the load-balancer associated for the EcsProject as a part of managing load & traffic.
 	ApplicationLoadBalancer() elb2.ApplicationLoadBalancer
+	// Ec2ContainerApplicationServices returns a slice of ECS EC2 based services that are currently in the EcsProject
 	Ec2ContainerApplicationServices() []ecs.Ec2Service
 }
 
@@ -60,11 +65,7 @@ func (prj *ecsProject) Ec2ContainerApplicationServices() []ecs.Ec2Service {
 	return prj.ec2ContainerApplicationServices
 }
 
-type ComputeStackProps struct {
-	core.NestedStackProps
-	Vpc ec2.IVpc
-}
-
+// NewEcsProject ecs project
 // Example:
 //
 //	brzecs.NewEcsProject(stack, jsii.String("EcsProject"), &brzecs.EcsProjectProps{

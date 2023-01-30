@@ -79,8 +79,8 @@ func TestNewLoadBalancedEc2Service(t *testing.T) {
 		//		},
 	})
 
-	//	json := template.ToJSON()
-	//	log.Println("Synthesized Template: ", json)
+	//    json := template.ToJSON()
+	//    log.Println("Synthesized Template: ", json)
 }
 
 func setup() {

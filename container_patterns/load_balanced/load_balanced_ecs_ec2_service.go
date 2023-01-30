@@ -107,8 +107,9 @@ type Volume struct {
 	Size string
 }
 
+// ServiceDiscoveryProps represents properties for CloudMap service discovery in ECS
 type ServiceDiscoveryProps struct {
-	ServiceName       string
+	ServiceName       string // name of the CloudMap service
 	ServicePort       float64
 	CloudMapNamespace CloudMapNamespaceProps
 }
@@ -396,7 +397,7 @@ func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *Lo
 				elb2.ListenerCondition_PathPatterns(jsii.Strings(props.LoadBalancer.ListenerRuleProps.PathCondition)),
 			},
 			Listener: elb2.ApplicationListener_FromApplicationListenerAttributes(this, jsii.String("ALBListener"), &elb2.ApplicationListenerAttributes{
-				ListenerArn: jsii.String(props.LoadBalancer.ListenerArn),
+				ListenerArn:   jsii.String(props.LoadBalancer.ListenerArn),
 				SecurityGroup: ec2.SecurityGroup_FromSecurityGroupId(this, jsii.String("ALBSecurityGroup"), jsii.String(props.LoadBalancer.SecurityGroupId), &ec2.SecurityGroupImportOptions{}),
 			}),
 		})
