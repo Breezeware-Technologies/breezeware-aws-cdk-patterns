@@ -3,3 +3,4 @@
 .idea
 cdk.context.*
 cdk.out
+coverage.out

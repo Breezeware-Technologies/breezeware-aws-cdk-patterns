@@ -1,11 +1,12 @@
+// Package network provides types for handling network related resources.
+//
+// Contains a type for looking-up an VPC.
 package network
 
-// VpcProps properties
+// A VpcProps represents properties for looking-up an VPC.
+//
+// Configure only IsDefault field and omit others, if the VPC looking-up is a default one.
 type VpcProps struct {
-	// Id of the VPC to lookup
-	Id string `field:"optional"`
-	//	// Name of the VPC to lookup
-	//	Name string `field:"optional"`
-	// Is the default VPC. Omit other fields if the VPC is deafult
-	IsDefault bool `field:"optional"`
+	Id        string `field:"optional"` // Id of the VPC
+	IsDefault bool   `field:"optional"` // IsDefault flag represents whether the VPC is a default one or not. Omit other fields if default.
 }

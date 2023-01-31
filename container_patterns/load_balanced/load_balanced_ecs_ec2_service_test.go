@@ -96,7 +96,7 @@ func setup() {
 		LogGroupName: "GolangCdkDemoService",
 		TaskDefinition: brzLbEc2Service.TaskDefinition{
 			FamilyName:  "rpc-service",
-			NetworkMode: brzLbEc2Service.TASK_DEFINTION_NETWORK_MODE_BRIDGE,
+			NetworkMode: brzLbEc2Service.TaskDefintionNetworkModeBridge,
 			EnvironmentFile: brzLbEc2Service.EnvironmentFile{
 				BucketName: "test-bucket",
 				BucketArn:  "<dummy>",
@@ -106,7 +106,7 @@ func setup() {
 				{
 					ContainerName:            "rpc-service",
 					Image:                    "rpc-service",
-					RegistryType:             brzLbEc2Service.CONTAINER_DEFINITION_REGISTRY_AWS_ECR,
+					RegistryType:             brzLbEc2Service.ContainerDefinitionRegistryAwsEcr,
 					ImageTag:                 "latest",
 					IsEssential:              true,
 					Cpu:                      512,
@@ -128,7 +128,7 @@ func setup() {
 		},
 		IsServiceDiscoveryEnabled: false,
 		ServiceDiscovery:          brzLbEc2Service.ServiceDiscoveryProps{},
-		IsLoadBalancerEnabled:     true,
+//		IsLoadBalancerEnabled:     true,
 		LoadBalancer: brzLbEc2Service.LoadBalancerProps{
 			ListenerArn:           "<dummy>",
 			SecurityGroupId:       "<dummy>",

@@ -1,3 +1,8 @@
+// Package containerpatterns provides level 3 CDK constructs for container based patterns.
+//
+// Provides patterns like:
+//   - load-balanced ECS service based on EC2.
+//   - non load-balanced ECS service based on EC2.
 package containerpatterns
 
 import (
@@ -18,127 +23,139 @@ import (
 	"github.com/aws/jsii-runtime-go"
 )
 
-// custom types
+// Custom types for enum handling
 type (
-	Networkmode                string
-	RegistryType               string
+	// Networkmode enum type
+	Networkmode string
+	// RegistryType enum type
+	RegistryType string
+	// LoadBalancerTargetProtocol enum type
 	LoadBalancerTargetProtocol string
 )
 
 // constants
 const (
-	DEFAULT_LOG_RETENTION        cloudwatchlogs.RetentionDays = cloudwatchlogs.RetentionDays_TWO_WEEKS
-	DEFAULT_DOCKER_VOLUME_DRIVER string                       = "rexray/ebs"
-	DEFAULT_DOCKER_VOLUME_TYPE   string                       = "gp2"
-	OTEL_CONTAINER_IMAGE         string                       = "amazon/aws-otel-collector:v0.25.0"
+	DefaultLogRetention       cloudwatchlogs.RetentionDays = cloudwatchlogs.RetentionDays_TWO_WEEKS
+	DefaultDockerVolumeDriver string                       = "rexray/ebs"
+	DefaultDockerVolumeType   string                       = "gp2"
+	OtelContainerImage        string                       = "amazon/aws-otel-collector:v0.25.0"
 )
 
 const (
-	TASK_DEFINTION_NETWORK_MODE_BRIDGE   Networkmode     = "BRIDGE"
-	TASK_DEFINTION_NETWORK_MODE_AWS_VPC  Networkmode     = "AWS_VPC"
-	DEFAULT_TASK_DEFINITION_NETWORK_MODE ecs.NetworkMode = ecs.NetworkMode_BRIDGE
+	TaskDefintionNetworkModeBridge   Networkmode     = "BRIDGE"               // Bridge mode Netwok mode of the ECS task definition
+	TaskDefintionNetworkModeAwsVpc   Networkmode     = "AWS_VPC"              // AWS_VPC mode Netwok mode of the ECS task definition
+	DefaultTaskDefinitionNetworkMode ecs.NetworkMode = ecs.NetworkMode_BRIDGE // Default Network mode of the ECS task definition with value ecs.NetworkMode_BRIDGE
 )
 
 const (
-	CONTAINER_DEFINITION_REGISTRY_AWS_ECR RegistryType = "ECR"
-	CONTAINER_DEFINITION_REGISTRY_OTHERS  RegistryType = "OTHERS"
-	DEFAULT_CONTAINER_DEFINITION_REGISTRY RegistryType = CONTAINER_DEFINITION_REGISTRY_AWS_ECR
+	ContainerDefinitionRegistryAwsEcr  RegistryType = "ECR"                             // ECR registry type for pulling image
+	ContainerDefinitionRegistryOthers  RegistryType = "OTHERS"                          // Other registry types for pulling image
+	DefaultContainerDefinitionRegistry RegistryType = ContainerDefinitionRegistryAwsEcr // Default registry type for pulling image with value ContainerDefinitionRegistryAwsEcr
 )
 
 const (
-	LOAD_BALANCER_TARGET_PROTOCOL_TCP     LoadBalancerTargetProtocol = "TCP"
-	LOAD_BALANCER_TARGET_PROTOCOL_UDP     LoadBalancerTargetProtocol = "UDP"
-	DEFAULT_LOAD_BALANCER_TARGET_PROTOCOL ecs.Protocol               = ecs.Protocol_TCP
+	loadBalancerTargetProtocolTcp     LoadBalancerTargetProtocol = "TCP"            // TCP target protocol for the Load-Balancer
+	loadBalancerTargetProtocolUdp     LoadBalancerTargetProtocol = "UDP"            // UDP target protocol for the Load-Balancer
+	DefaultLoadBalancerTargetProtocol ecs.Protocol               = ecs.Protocol_TCP // Default target protocol for the Load-Balancer with value ecs.Protocol_TCP
 )
 
-// LoadBalancedEc2ServiceProps represents the properties that are needed to create a load-balanced EC2 Service inside ECS
+// LoadBalancedEc2ServiceProps represents the properties that are needed to create a Application Load-balanced EC2 Service inside ECS
 type LoadBalancedEc2ServiceProps struct {
-	Cluster                   ClusterProps                  // Cluster properties
-	LogGroupName              string                        // LogGroup name
-	TaskDefinition            TaskDefinition                // TaskDefinition for EC2 service
-	IsTracingEnabled          bool                          // flag for EC2 service tracing
-	DesiredTaskCount          float64                       // number of task count that is desired to run inside the EC2 service
-	CapacityProviders         []string                      // slice of CapacityProvider names
-	IsServiceDiscoveryEnabled bool                          // flag for EC2 service discovery
-	ServiceDiscovery          ServiceDiscoveryProps         // ServiceDiscovery properties
-	IsLoadBalancerEnabled     bool                          // flag for EC2 Service load-balancing
-	LoadBalancer              LoadBalancerProps             // LoadBalancer properties
-	LoadBalancerTargetOptions ecs.LoadBalancerTargetOptions // LoadBalancerTarget options
+	Cluster                   ClusterProps                  // cluster properties for the EC2 based Service
+	LogGroupName              string                        // name of the Log Group that will be created for the Load-Balanced EC2 based Service
+	TaskDefinition            TaskDefinition                // task-definition for the EC2 based service
+	IsTracingEnabled          bool                          // flag representing whether service level tracing is enabled or not
+	DesiredTaskCount          float64                       // number of task(s) that is desired to run at all time inside the EC2 based Service
+	CapacityProviders         []string                      // capacity providers to provision the EC2 instance infrastructure needed for the service's task(s) to run
+	IsServiceDiscoveryEnabled bool                          // flag representing whether service discovery is enabled or not for internal service identification/discovery inside the ECS Cluster
+	ServiceDiscovery          ServiceDiscoveryProps         // service discovery properties if IsServiceDiscoveryEnabled flag is true
+	LoadBalancer              LoadBalancerProps             // application load-balancer properties for the EC2 based Service
+	LoadBalancerTargetOptions ecs.LoadBalancerTargetOptions // application load-balancer target configuration for the EC2 based Service
 }
 
+// ClusterProps represents the properties for retrieving a Cluster
 type ClusterProps struct {
-	ClusterName    string
-	Vpc            brznetwork.VpcProps
-	SecurityGroups []ec2.ISecurityGroup
+	ClusterName    string               // name of the cluster
+	Vpc            brznetwork.VpcProps  // vpc properties
+	SecurityGroups []ec2.ISecurityGroup // security groups of the Auto-Scaling Groups associated with the Cluster if Auto-Scaling Group based Capacity providers are configured
 }
 
+// TaskDefinition represents the properties for creating a ecs.TaskDefinition
 type TaskDefinition struct {
-	FamilyName            string
-	NetworkMode           Networkmode
-	EnvironmentFile       EnvironmentFile
-	TaskPolicy            iam.PolicyDocument
-	ApplicationContainers []ContainerDefinition
-	RequiresVolume        bool
-	Volumes               []Volume
+	FamilyName            string                // family name of the task-definition, used for grouping
+	NetworkMode           Networkmode           // network mode for the task-definition, can be either TaskDefintionNetworkModeBridge or TaskDefintionNetworkModeAwsVpc. Default value configured to DefaultTaskDefinitionNetworkMode
+	EnvironmentFile       EnvironmentFile       // environment file propeties
+	TaskPolicy            iam.PolicyDocument    // task policy of the task-definition. Gives the container(s) specified in the TaskDefinition access to the AWS service(s)
+	ApplicationContainers []ContainerDefinition // application container definitions. Container specification like registry, image, tag, logging, etc
+	RequiresVolume        bool                  // flag representing whether the task-definition requires volume to persist data
+	Volumes               []Volume              // volumes for the task-definition. Only used if RequiresVolume falg is true, else ommited even if configured
 }
 
+// EnvironmentFile represents the S3 Bucket options for environment file(s) in the TaskDefinition
 type EnvironmentFile struct {
-	BucketName string
-	BucketArn  string
+	BucketName string // bucket name
+	BucketArn  string // bucket arn
 }
 
+// ContainerDefinition represents container-definition for the TaskDefinition
 type ContainerDefinition struct {
-	ContainerName            string
-	Image                    string
-	RegistryType             RegistryType
-	ImageTag                 string
-	IsEssential              bool
-	Commands                 []string
-	EntryPointCommands       []string
-	Cpu                      float64
-	Memory                   float64
-	PortMappings             []ecs.PortMapping
-	EnvironmentFileObjectKey string
-	VolumeMountPoint         []ecs.MountPoint
+	ContainerName            string            // name of the container when instantiated
+	Image                    string            // container image without tag
+	RegistryType             RegistryType      // type of registry for pullin image. Default registry type configured to use DefaultContainerDefinitionRegistry
+	ImageTag                 string            // container image's tag
+	IsEssential              bool              // falg representing whether the container should be considered as essential for the TaskDefinition
+	Commands                 []string          // shell commands to be supplied when instantiating the container
+	EntryPointCommands       []string          // entrypoint commands to be supplied when instantiating the container
+	Cpu                      float64           // cpu allocation for the container
+	Memory                   float64           // memory allocation for the container.
+	PortMappings             []ecs.PortMapping // port mapping of the container. Dynamic port mapping is used, if Host port is not configured. Useful for auto-scaling of tasks under load-balancer
+	EnvironmentFileObjectKey string            // object key of the environment file present in the S3 bucket
+	VolumeMountPoint         []ecs.MountPoint  // volume mounts incase of data persistence needed by the container
 }
 
+// Volume represents properties for creating a EBS Volume for the TaskDefinition
 type Volume struct {
 	Name string
 	Size string
 }
 
-// ServiceDiscoveryProps represents properties for CloudMap service discovery in ECS
+// ServiceDiscoveryProps represents properties for service discovery using CLoudMap for the EC2 based Service
 type ServiceDiscoveryProps struct {
-	ServiceName       string // name of the CloudMap service
-	ServicePort       float64
-	CloudMapNamespace CloudMapNamespaceProps
+	ServiceName       string                 // cloudmap namespace service name of the EC2 based ECS Service for service discovery
+	ServicePort       float64                // port configuration of the EC2 based ECS Service for service discovery
+	CloudMapNamespace CloudMapNamespaceProps // cloudmap namespace properties
 }
 
+// CloudMapNamespaceProps represents properties for retrieving the CloudMapNamespace
 type CloudMapNamespaceProps struct {
-	NamespaceName string
-	NamespaceId   string
-	NamespaceArn  string
+	NamespaceName string // name of the namespace
+	NamespaceId   string // id of the namespace
+	NamespaceArn  string // arn of the namespace
 }
 
+// LoadBalancerProps represents the properties for associating the Application Load-Balancer with the EC2 based ECS Service
 type LoadBalancerProps struct {
-	SecurityGroupId       string
-	TargetHealthCheckPath string
-	ListenerArn           string
-	ListenerRuleProps     ListenerRuleProps
+	SecurityGroupId       string            // id of the load-balancer's security group
+	TargetHealthCheckPath string            // health check path of the target to validate target health.
+	ListenerArn           string            // arn of the HTTPS listener associated with the load balancer
+	ListenerRuleProps     ListenerRuleProps // listener rule properties for handling traffic to multiple targets inside the load-balancer. Service(s) will be registered as individual targets inside a single load balancer
 }
 
+// ListenerRuleProps represents the Application Load-Balancer listener rule properties
 type ListenerRuleProps struct {
-	Priority      float64
-	PathCondition string
-	HostCondition string
+	Priority      float64 // rule priority
+	PathCondition string  // path for path based routing, like '/api/*' will be routed to a target
+	HostCondition string  // host for host based routing, like 'app.example.com' will be routed to a target
 }
 
+// loadBalancedEc2Service construct type
 type loadBalancedEc2Service struct {
 	constructs.Construct
 	logGroup   cloudwatchlogs.LogGroup
 	ec2Service ecs.Ec2Service
 }
 
+// LoadBalancedEc2Service provides implementation for the loadBalancedEc2Service
 type LoadBalancedEc2Service interface {
 	LogGroup() cloudwatchlogs.LogGroup
 	Service() ecs.Ec2Service
@@ -152,7 +169,10 @@ func (s *loadBalancedEc2Service) LogGroup() cloudwatchlogs.LogGroup {
 	return s.logGroup
 }
 
-// Creates a new ECS EC2 Service under a Load-Balancer
+// NewLoadBalancedEc2Service sreates a new ECS EC2 based service.
+//
+// Internally creates a Log Group for each service created
+// and attaches a policy statement to the task role if present or creates a new task role with AWS XRay access if tracing is enabled
 func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *LoadBalancedEc2ServiceProps) LoadBalancedEc2Service {
 	this := constructs.NewConstruct(scope, id)
 
@@ -178,10 +198,10 @@ func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *Lo
 
 	vpc := lookupVpc(this, id, &props.Cluster.Vpc)
 
-	var networkMode ecs.NetworkMode = DEFAULT_TASK_DEFINITION_NETWORK_MODE
+	var networkMode ecs.NetworkMode = DefaultTaskDefinitionNetworkMode
 	var loadBalancedServiceTargetType elb2.TargetType = elb2.TargetType_IP
 	var serviceSecurityGroups []ec2.ISecurityGroup = nil
-	if props.TaskDefinition.NetworkMode == TASK_DEFINTION_NETWORK_MODE_AWS_VPC {
+	if props.TaskDefinition.NetworkMode == TaskDefintionNetworkModeAwsVpc {
 		// task definition network mode configuration
 		networkMode = ecs.NetworkMode_AWS_VPC
 		// load balancer target type configuration
@@ -194,7 +214,7 @@ func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *Lo
 		sg.AddIngressRule(ec2.Peer_AnyIpv4(), ec2.Port_Tcp(jsii.Number(props.ServiceDiscovery.ServicePort)), nil, nil)
 		serviceSecurityGroups = append(serviceSecurityGroups, sg)
 
-	} else if props.TaskDefinition.NetworkMode == TASK_DEFINTION_NETWORK_MODE_BRIDGE {
+	} else if props.TaskDefinition.NetworkMode == TaskDefintionNetworkModeBridge {
 		networkMode = ecs.NetworkMode_BRIDGE
 		loadBalancedServiceTargetType = elb2.TargetType_INSTANCE
 	}
@@ -243,11 +263,11 @@ func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *Lo
 			var vol ecs.Volume = ecs.Volume{
 				Name: jsii.String(volume.Name),
 				DockerVolumeConfiguration: &ecs.DockerVolumeConfiguration{
-					Driver:        jsii.String(DEFAULT_DOCKER_VOLUME_DRIVER),
+					Driver:        jsii.String(DefaultDockerVolumeDriver),
 					Scope:         ecs.Scope_SHARED,
 					Autoprovision: jsii.Bool(true),
 					DriverOpts: &map[string]*string{
-						"volumetype": jsii.String(DEFAULT_DOCKER_VOLUME_TYPE),
+						"volumetype": jsii.String(DefaultDockerVolumeType),
 						"size":       jsii.String(volume.Size),
 					},
 				},
@@ -256,25 +276,27 @@ func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *Lo
 		}
 	}
 
-	// Creates a CloudWatch Log Group for each service
+	// Creates a CloudWatch Log Group for each service with removal policy set to DESTROY
 	logGroup := cloudwatchlogs.NewLogGroup(this, jsii.String("LogGroup"), &cloudwatchlogs.LogGroupProps{
 		LogGroupName: jsii.String(props.LogGroupName),
-		Retention:    DEFAULT_LOG_RETENTION,
+		Retention:    DefaultLogRetention,
 	})
 	logGroup.ApplyRemovalPolicy(core.RemovalPolicy_DESTROY)
 
+	// added otel container-defintion to task-defintion if tracing is enabled
 	var otelContainerDef ecs.ContainerDefinition = nil
 	if props.IsTracingEnabled {
 		otelContainerDef = ecs.NewContainerDefinition(scope, jsii.String("OtelContainerDefinition"), &ecs.ContainerDefinitionProps{
 			TaskDefinition: taskDef,
 			ContainerName:  jsii.String("otel-xray"),
-			Image:          ecs.ContainerImage_FromRegistry(jsii.String(OTEL_CONTAINER_IMAGE), &ecs.RepositoryImageProps{}),
+			Image:          ecs.ContainerImage_FromRegistry(jsii.String(OtelContainerImage), &ecs.RepositoryImageProps{}),
 			Cpu:            jsii.Number(256),
 			MemoryLimitMiB: jsii.Number(256),
-			Logging:        setupContianerAwsLogDriver(logGroup, "otel"),
+			Logging:        createAwsLogDriverForContainer(logGroup, "otel"),
 			Command: &[]*string{
 				jsii.String("--config=/etc/ecs/ecs-default-config.yaml"),
 			},
+			// Dynamic port mapping is used
 			PortMappings: &[]*ecs.PortMapping{
 				{
 					ContainerPort: jsii.Number(2000),
@@ -293,14 +315,14 @@ func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *Lo
 	}
 
 	for index, containerDef := range props.TaskDefinition.ApplicationContainers {
-		// update task definition with statements providing container the acces to specific environment files in th S3 bucket
+		// update task definition with statements providing container access to specific environment file in th S3 bucket
 		taskDef.AddToExecutionRolePolicy(
 			createEnvironmentFileObjectReadOnlyAccessPolicyStatement(
 				props.TaskDefinition.EnvironmentFile.BucketArn,
 				containerDef.EnvironmentFileObjectKey),
 		)
-		// creates container definition for the task definition
-		cd := configureContainerToTaskDefinition(
+		// creates a container definition and associates it with the task definition
+		cd := createContainerDefinition(
 			this,
 			"Container"+strconv.FormatInt(int64(index), 10),
 			containerDef,
@@ -313,8 +335,11 @@ func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *Lo
 			logGroup,
 			props.IsTracingEnabled,
 		)
+		// addes volume mounts for the container definition
 		cd.AddMountPoints(convertContainerVolumeMountPoints(containerDef.VolumeMountPoint)...)
 
+		// creates a container link between the actual container and the otel xray container if tracing is enabled
+		// Only works in NetworkMode_BRIDGE mode
 		if props.IsTracingEnabled && otelContainerDef != nil {
 			cd.AddLink(otelContainerDef, jsii.String("otel-xray"))
 			cd.AddContainerDependencies(&ecs.ContainerDependency{
@@ -326,12 +351,12 @@ func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *Lo
 
 	var capacityProviderStrategies []*ecs.CapacityProviderStrategy
 	for _, cps := range props.CapacityProviders {
-		capacityProviderStrategy := createServiceCapacityProviderStrategy(cps)
+		capacityProviderStrategy := createCapacityProviderStrategy(cps)
 		capacityProviderStrategies = append(capacityProviderStrategies, &capacityProviderStrategy)
 	}
 
+	// creates cloudmap options for EC2 based ECS Service if service discovery is enabled
 	var cmOpts *ecs.CloudMapOptions = nil
-	//	var serviceSecurityGroups []ec2.ISecurityGroup = []ec2.ISecurityGroup{}
 	if props.IsServiceDiscoveryEnabled {
 		cmOpts = &ecs.CloudMapOptions{
 			DnsTtl:            core.Duration_Minutes(jsii.Number(1)),
@@ -340,13 +365,8 @@ func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *Lo
 			Name:              jsii.String(props.ServiceDiscovery.ServiceName),
 			CloudMapNamespace: getCloudMapNamespaceService(this, props.ServiceDiscovery),
 		}
-		//		sg := ec2.NewSecurityGroup(this, jsii.String("ServiceSecurityGroup"), &ec2.SecurityGroupProps{
-		//			Vpc:              vpc,
-		//			AllowAllOutbound: jsii.Bool(true),
-		//		})
-		//		sg.AddIngressRule(ec2.Peer_AnyIpv4(), ec2.Port_Tcp(jsii.Number(loadBalancedEc2ServiceProps.ServiceDiscovery.ServicePort)), nil, nil)
-		//		serviceSecurityGroups = append(serviceSecurityGroups, sg)
 	}
+	// builds a Ec2ServiceProps
 	ec2ServiceProps := ecs.Ec2ServiceProps{
 		Cluster: ecs.Cluster_FromClusterAttributes(this, jsii.String("Cluster"), &ecs.ClusterAttributes{
 			ClusterName:    jsii.String(props.Cluster.ClusterName),
@@ -359,59 +379,63 @@ func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *Lo
 		CircuitBreaker: &ecs.DeploymentCircuitBreaker{
 			Rollback: jsii.Bool(true),
 		},
+		// placement strategy default to memory
 		PlacementStrategies: &[]ecs.PlacementStrategy{
 			ecs.PlacementStrategy_PackedByMemory(),
 		},
-		CloudMapOptions:      cmOpts,
+		CloudMapOptions: cmOpts,
+		// tag(s) propagation
 		PropagateTags:        ecs.PropagatedTagSource_SERVICE,
 		EnableECSManagedTags: jsii.Bool(true),
-		//		SecurityGroups:       &serviceSecurityGroups,
 	}
-	if props.TaskDefinition.NetworkMode == TASK_DEFINTION_NETWORK_MODE_AWS_VPC {
+	// configures security groups for the EC2Service if task-definition's network mode is TaskDefintionNetworkModeAwsVpc
+	if props.TaskDefinition.NetworkMode == TaskDefintionNetworkModeAwsVpc {
 		ec2ServiceProps.SecurityGroups = &serviceSecurityGroups
 	}
 
+	// creates an EC2Service based on the Ec2ServiceProps
 	ec2Service := ecs.NewEc2Service(this, jsii.String("Ec2Service"), &ec2ServiceProps)
 
-	if props.IsLoadBalancerEnabled {
-		ecsServiceTargetGroup := elb2.NewApplicationTargetGroup(this, jsii.String("ApplicationTargetGroup"), &elb2.ApplicationTargetGroupProps{
-			HealthCheck: &elb2.HealthCheck{
-				Enabled:          jsii.Bool(true),
-				HealthyHttpCodes: jsii.String("200"),
-				Path:             jsii.String(props.LoadBalancer.TargetHealthCheckPath),
-				Interval:         core.Duration_Seconds(jsii.Number(30)),
-			},
-			TargetType: loadBalancedServiceTargetType,
-			Vpc:        vpc,
-			Protocol:   elb2.ApplicationProtocol_HTTP,
-			Targets: &[]elb2.IApplicationLoadBalancerTarget{
-				ec2Service.LoadBalancerTarget(&props.LoadBalancerTargetOptions),
-			},
-		})
+	// creates a application load-balancer target group for the service
+	ecsServiceTargetGroup := elb2.NewApplicationTargetGroup(this, jsii.String("ApplicationTargetGroup"), &elb2.ApplicationTargetGroupProps{
+		HealthCheck: &elb2.HealthCheck{
+			Enabled:          jsii.Bool(true),
+			HealthyHttpCodes: jsii.String("200"),
+			Path:             jsii.String(props.LoadBalancer.TargetHealthCheckPath),
+			Interval:         core.Duration_Seconds(jsii.Number(30)),
+		},
+		TargetType: loadBalancedServiceTargetType,
+		Vpc:        vpc,
+		Protocol:   elb2.ApplicationProtocol_HTTP,
+		Targets: &[]elb2.IApplicationLoadBalancerTarget{
+			ec2Service.LoadBalancerTarget(&props.LoadBalancerTargetOptions),
+		},
+	})
 
-		elb2.NewApplicationListenerRule(this, jsii.String("ALBListenerRule"), &elb2.ApplicationListenerRuleProps{
-			Priority: jsii.Number(props.LoadBalancer.ListenerRuleProps.Priority),
-			Action:   elb2.ListenerAction_Forward(&[]elb2.IApplicationTargetGroup{ecsServiceTargetGroup}, &elb2.ForwardOptions{}),
-			Conditions: &[]elb2.ListenerCondition{
-				elb2.ListenerCondition_HostHeaders(jsii.Strings(props.LoadBalancer.ListenerRuleProps.HostCondition)),
-				elb2.ListenerCondition_PathPatterns(jsii.Strings(props.LoadBalancer.ListenerRuleProps.PathCondition)),
-			},
-			Listener: elb2.ApplicationListener_FromApplicationListenerAttributes(this, jsii.String("ALBListener"), &elb2.ApplicationListenerAttributes{
-				ListenerArn:   jsii.String(props.LoadBalancer.ListenerArn),
-				SecurityGroup: ec2.SecurityGroup_FromSecurityGroupId(this, jsii.String("ALBSecurityGroup"), jsii.String(props.LoadBalancer.SecurityGroupId), &ec2.SecurityGroupImportOptions{}),
-			}),
-		})
-	}
+	// creates a listener rule for the application load-balancer for routing traffic to the EC2Service
+	elb2.NewApplicationListenerRule(this, jsii.String("ALBListenerRule"), &elb2.ApplicationListenerRuleProps{
+		Priority: jsii.Number(props.LoadBalancer.ListenerRuleProps.Priority),
+		Action:   elb2.ListenerAction_Forward(&[]elb2.IApplicationTargetGroup{ecsServiceTargetGroup}, &elb2.ForwardOptions{}),
+		Conditions: &[]elb2.ListenerCondition{
+			elb2.ListenerCondition_HostHeaders(jsii.Strings(props.LoadBalancer.ListenerRuleProps.HostCondition)),
+			elb2.ListenerCondition_PathPatterns(jsii.Strings(props.LoadBalancer.ListenerRuleProps.PathCondition)),
+		},
+		Listener: elb2.ApplicationListener_FromApplicationListenerAttributes(this, jsii.String("ALBListener"), &elb2.ApplicationListenerAttributes{
+			ListenerArn:   jsii.String(props.LoadBalancer.ListenerArn),
+			SecurityGroup: ec2.SecurityGroup_FromSecurityGroupId(this, jsii.String("ALBSecurityGroup"), jsii.String(props.LoadBalancer.SecurityGroupId), &ec2.SecurityGroupImportOptions{}),
+		}),
+	})
 
 	return &loadBalancedEc2Service{this, logGroup, ec2Service}
 }
 
-func configureContainerToTaskDefinition(scope constructs.Construct, id string, containerDef ContainerDefinition, taskDef ecs.TaskDefinition, taskDefEnvFileBucket s3.IBucket, logGroup cloudwatchlogs.ILogGroup, tracingEnabled bool) ecs.ContainerDefinition {
+// createContainerDefinition creates a container-definition and associates it to the taskDef
+func createContainerDefinition(scope constructs.Construct, id string, containerDef ContainerDefinition, taskDef ecs.TaskDefinition, taskDefEnvFileBucket s3.IBucket, logGroup cloudwatchlogs.ILogGroup, tracingEnabled bool) ecs.ContainerDefinition {
 	cd := ecs.NewContainerDefinition(scope, jsii.String(id), &ecs.ContainerDefinitionProps{
 		TaskDefinition: taskDef,
 		ContainerName:  &containerDef.ContainerName,
-		Command:        convertContainerCommands(containerDef.Commands),
-		EntryPoint:     convertContainerEntryPointCommands(containerDef.EntryPointCommands),
+		//		Command:        convertContainerCommands(containerDef.Commands),
+		//		EntryPoint:     convertContainerEntryPointCommands(containerDef.EntryPointCommands),
 		Essential:      jsii.Bool(containerDef.IsEssential),
 		Image:          configureContainerImage(scope, containerDef.RegistryType, containerDef.Image, containerDef.ImageTag),
 		Cpu:            jsii.Number(containerDef.Cpu),
@@ -419,29 +443,30 @@ func configureContainerToTaskDefinition(scope constructs.Construct, id string, c
 		EnvironmentFiles: &[]ecs.EnvironmentFile{
 			ecs.AssetEnvironmentFile_FromBucket(taskDefEnvFileBucket, jsii.String(containerDef.EnvironmentFileObjectKey), nil),
 		},
-		Logging:      setupContianerAwsLogDriver(logGroup, containerDef.ContainerName),
+		Logging:      createAwsLogDriverForContainer(logGroup, containerDef.ContainerName),
 		PortMappings: convertContainerPortMappings(containerDef.PortMappings),
 	})
 
 	return cd
 }
 
-func convertContainerCommands(cmds []string) *[]*string {
-	var commands []*string
-	for _, cmd := range cmds {
-		commands = append(commands, jsii.String(cmd))
-	}
-	return &commands
-}
+//func convertContainerCommands(cmds []string) *[]*string {
+//	var commands []*string
+//	for _, cmd := range cmds {
+//		commands = append(commands, jsii.String(cmd))
+//	}
+//	return &commands
+//}
 
-func convertContainerEntryPointCommands(cmds []string) *[]*string {
-	var entryPointCmds []*string
-	for _, cmd := range cmds {
-		entryPointCmds = append(entryPointCmds, jsii.String(cmd))
-	}
-	return &entryPointCmds
-}
+//func convertContainerEntryPointCommands(cmds []string) *[]*string {
+//	var entryPointCmds []*string
+//	for _, cmd := range cmds {
+//		entryPointCmds = append(entryPointCmds, jsii.String(cmd))
+//	}
+//	return &entryPointCmds
+//}
 
+// convertContainerPortMappings converts PortMapping(s) to pointers
 func convertContainerPortMappings(pm []ecs.PortMapping) *[]*ecs.PortMapping {
 	var portMapping []*ecs.PortMapping
 	for _, mapping := range pm {
@@ -451,6 +476,7 @@ func convertContainerPortMappings(pm []ecs.PortMapping) *[]*ecs.PortMapping {
 
 }
 
+// convertContainerVolumeMountPoints converts MountPoint(s) to pointers
 func convertContainerVolumeMountPoints(pm []ecs.MountPoint) []*ecs.MountPoint {
 	var mountPoints []*ecs.MountPoint
 	for _, mount := range pm {
@@ -459,15 +485,17 @@ func convertContainerVolumeMountPoints(pm []ecs.MountPoint) []*ecs.MountPoint {
 	return mountPoints
 }
 
+// configureContainerImage creates a ContainerImage based on the registryType
 func configureContainerImage(scope constructs.Construct, registryType RegistryType, image string, tag string) ecs.ContainerImage {
-	if registryType == CONTAINER_DEFINITION_REGISTRY_AWS_ECR {
+	if registryType == ContainerDefinitionRegistryAwsEcr {
 		return ecs.ContainerImage_FromEcrRepository(ecr.Repository_FromRepositoryName(scope, jsii.String("EcrRepository"), jsii.String(image)), jsii.String(tag))
 	} else {
 		return ecs.ContainerImage_FromRegistry(jsii.String(image+":"+tag), &ecs.RepositoryImageProps{})
 	}
 }
 
-func setupContianerAwsLogDriver(logGroup cloudwatchlogs.ILogGroup, prefix string) ecs.LogDriver {
+// createAwsLogDriverForContainer creates an AwsLogDriver for the container to handle logs with AWS CloudWatch service
+func createAwsLogDriverForContainer(logGroup cloudwatchlogs.ILogGroup, prefix string) ecs.LogDriver {
 	logDriver := ecs.AwsLogDriver_AwsLogs(&ecs.AwsLogDriverProps{
 		LogGroup:     logGroup,
 		StreamPrefix: jsii.String(prefix),
@@ -475,6 +503,7 @@ func setupContianerAwsLogDriver(logGroup cloudwatchlogs.ILogGroup, prefix string
 	return logDriver
 }
 
+// lookupVpc looks-up for the vpc using th VpcProps
 func lookupVpc(scope constructs.Construct, id *string, props *brznetwork.VpcProps) ec2.IVpc {
 	vpc := ec2.Vpc_FromLookup(scope, jsii.String("Vpc"), &ec2.VpcLookupOptions{
 		VpcId:     jsii.String(props.Id),
@@ -483,7 +512,8 @@ func lookupVpc(scope constructs.Construct, id *string, props *brznetwork.VpcProp
 	return vpc
 }
 
-func createServiceCapacityProviderStrategy(name string) ecs.CapacityProviderStrategy {
+// createCapacityProviderStrategy creates a CapacityProviderStrategy for the EC2Service with default weight configured to 1
+func createCapacityProviderStrategy(name string) ecs.CapacityProviderStrategy {
 	capacityProviderStrategy := ecs.CapacityProviderStrategy{
 		CapacityProvider: jsii.String(name),
 		Weight:           jsii.Number(1),
@@ -492,6 +522,9 @@ func createServiceCapacityProviderStrategy(name string) ecs.CapacityProviderStra
 	return capacityProviderStrategy
 }
 
+// createEnvironmentFileObjectReadOnlyAccessPolicyStatement creates a policy statement that will be attached to the EC2Service's execution role policy
+//
+// adds access only to the particular s3 object mentioned as environment file in the container-definition
 func createEnvironmentFileObjectReadOnlyAccessPolicyStatement(bucket string, key string) iam.PolicyStatement {
 
 	policy := iam.NewPolicyStatement(
@@ -509,6 +542,9 @@ func createEnvironmentFileObjectReadOnlyAccessPolicyStatement(bucket string, key
 	return policy
 }
 
+// createTaskContainerDefaultXrayPolciyStatement creates a policy statement that will be attached to the EC2Service's task role policy
+//
+// adds access to all reources in the AWS Xray
 func createTaskContainerDefaultXrayPolciyStatement() iam.PolicyStatement {
 	policy := iam.NewPolicyStatement(&iam.PolicyStatementProps{
 		Actions: &[]*string{
