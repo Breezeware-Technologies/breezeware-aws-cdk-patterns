@@ -1,6 +1,7 @@
 package containerpatterns
 
 import (
+	"math/rand"
 	"strconv"
 
 	brznetwork "github.com/Breezeware-Technologies/breezeware-aws-cdk-patterns/network"
@@ -55,91 +56,91 @@ const (
 
 // LoadBalancedEc2ServiceProps represents the properties that are needed to create a Application Load-balanced EC2 Service inside ECS
 type LoadBalancedEc2ServiceProps struct {
-	Cluster                   ClusterProps                  // cluster properties for the EC2 based Service
-	LogGroupName              string                        // name of the Log Group that will be created for the Load-Balanced EC2 based Service
-	TaskDefinition            TaskDefinition                // task-definition for the EC2 based service
-	IsTracingEnabled          bool                          // flag representing whether service level tracing is enabled or not
-	DesiredTaskCount          float64                       // number of task(s) that is desired to run at all time inside the EC2 based Service
-	CapacityProviders         []string                      // capacity providers to provision the EC2 instance infrastructure needed for the service's task(s) to run
-	IsServiceDiscoveryEnabled bool                          // flag representing whether service discovery is enabled or not for internal service identification/discovery inside the ECS Cluster
-	ServiceDiscovery          ServiceDiscoveryProps         // service discovery properties if IsServiceDiscoveryEnabled flag is true
-	LoadBalancer              LoadBalancerProps             // application load-balancer properties for the EC2 based Service
-	LoadBalancerTargetOptions ecs.LoadBalancerTargetOptions // application load-balancer target configuration for the EC2 based Service
+	Cluster                   ClusterProps                  `field:"required"` // cluster properties for the EC2 based Service
+	LogGroupName              string                        `field:"required"` // name of the Log Group that will be created for the Load-Balanced EC2 based Service
+	TaskDefinition            TaskDefinition                `field:"required"` // task-definition for the EC2 based service
+	IsTracingEnabled          bool                          `field:"required"` // flag representing whether service level tracing is enabled or not
+	DesiredTaskCount          float64                       `field:"required"` // number of task(s) that is desired to run at all time inside the EC2 based Service
+	CapacityProviders         []string                      `field:"required"` // capacity providers to provision the EC2 instance infrastructure needed for the service's task(s) to run
+	IsServiceDiscoveryEnabled bool                          `field:"required"` // flag representing whether service discovery is enabled or not for internal service identification/discovery inside the ECS Cluster
+	ServiceDiscovery          ServiceDiscoveryProps         `field:"optional"` // service discovery properties if IsServiceDiscoveryEnabled flag is true
+	LoadBalancer              LoadBalancerProps             `field:"required"` // application load-balancer properties for the EC2 based Service
+	LoadBalancerTargetOptions ecs.LoadBalancerTargetOptions `field:"required"` // application load-balancer target configuration for the EC2 based Service
 }
 
 // ClusterProps represents the properties for retrieving a Cluster
 type ClusterProps struct {
-	ClusterName    string               // name of the cluster
-	Vpc            brznetwork.VpcProps  // vpc properties
-	SecurityGroups []ec2.ISecurityGroup // security groups of the Auto-Scaling Groups associated with the Cluster if Auto-Scaling Group based Capacity providers are configured
+	ClusterName    string               `field:"required"` // name of the cluster
+	Vpc            brznetwork.VpcProps  `field:"required"` // vpc properties
+	SecurityGroups []ec2.ISecurityGroup `field:"required"` // security groups of the Auto-Scaling Groups associated with the Cluster if Auto-Scaling Group based Capacity providers are configured
 }
 
 // TaskDefinition represents the properties for creating a ecs.TaskDefinition
 type TaskDefinition struct {
-	FamilyName            string                // family name of the task-definition, used for grouping
-	NetworkMode           Networkmode           // network mode for the task-definition, can be either TaskDefintionNetworkModeBridge or TaskDefintionNetworkModeAwsVpc. Default value configured to DefaultTaskDefinitionNetworkMode
-	EnvironmentFile       EnvironmentFile       // environment file propeties
-	TaskPolicy            iam.PolicyDocument    // task policy of the task-definition. Gives the container(s) specified in the TaskDefinition access to the AWS service(s)
-	ApplicationContainers []ContainerDefinition // application container definitions. Container specification like registry, image, tag, logging, etc
-	RequiresVolume        bool                  // flag representing whether the task-definition requires volume to persist data
-	Volumes               []Volume              // volumes for the task-definition. Only used if RequiresVolume falg is true, else ommited even if configured
+	FamilyName            string                `field:"optional"` // family name of the task-definition, used for grouping
+	NetworkMode           Networkmode           `field:"required"` // network mode for the task-definition, can be either TaskDefintionNetworkModeBridge or TaskDefintionNetworkModeAwsVpc. Default value configured to DefaultTaskDefinitionNetworkMode
+	EnvironmentFile       EnvironmentFile       `field:"required"` // environment file propeties
+	TaskPolicy            iam.PolicyDocument    `field:"optional"` // task policy of the task-definition. Gives the container(s) specified in the TaskDefinition access to the AWS service(s)
+	ApplicationContainers []ContainerDefinition `field:"required"` // application container definitions. Container specification like registry, image, tag, logging, etc
+	RequiresVolume        bool                  `field:"required"` // flag representing whether the task-definition requires volume to persist data
+	Volumes               []Volume              `field:"optional"` // volumes for the task-definition. Only used if RequiresVolume falg is true, else ommited even if configured
 }
 
 // EnvironmentFile represents the S3 Bucket options for environment file(s) in the TaskDefinition
 type EnvironmentFile struct {
-	BucketName string // bucket name
-	BucketArn  string // bucket arn
+	BucketName string `field:"required"` // bucket name
+	BucketArn  string `field:"optional"` // bucket arn
 }
 
 // ContainerDefinition represents container-definition for the TaskDefinition
 type ContainerDefinition struct {
-	ContainerName            string            // name of the container when instantiated
-	Image                    string            // container image without tag
-	RegistryType             RegistryType      // type of registry for pullin image. Default registry type configured to use DefaultContainerDefinitionRegistry
-	ImageTag                 string            // container image's tag
-	IsEssential              bool              // falg representing whether the container should be considered as essential for the TaskDefinition
-	Commands                 []string          // shell commands to be supplied when instantiating the container
-	EntryPointCommands       []string          // entrypoint commands to be supplied when instantiating the container
-	Cpu                      float64           // cpu allocation for the container
-	Memory                   float64           // memory allocation for the container.
-	PortMappings             []ecs.PortMapping // port mapping of the container. Dynamic port mapping is used, if Host port is not configured. Useful for auto-scaling of tasks under load-balancer
-	EnvironmentFileObjectKey string            // object key of the environment file present in the S3 bucket
-	VolumeMountPoint         []ecs.MountPoint  // volume mounts incase of data persistence needed by the container
+	ContainerName            string            `field:"required"` // name of the container when instantiated
+	Image                    string            `field:"required"` // container image without tag
+	RegistryType             RegistryType      `field:"required"` // type of registry for pullin image. Default registry type configured to use DefaultContainerDefinitionRegistry
+	ImageTag                 string            `field:"required"` // container image's tag
+	IsEssential              bool              `field:"required"` // falg representing whether the container should be considered as essential for the TaskDefinition
+	Commands                 []string          `field:"optional"` // shell commands to be supplied when instantiating the container
+	EntryPointCommands       []string          `field:"optional"` // entrypoint commands to be supplied when instantiating the container
+	Cpu                      float64           `field:"required"` // cpu allocation for the container
+	Memory                   float64           `field:"required"` // memory allocation for the container.
+	PortMappings             []ecs.PortMapping `field:"required"` // port mapping of the container. Dynamic port mapping is used, if Host port is not configured. Useful for auto-scaling of tasks under load-balancer
+	EnvironmentFileObjectKey string            `field:"required"` // object key of the environment file present in the S3 bucket
+	VolumeMountPoint         []ecs.MountPoint  `field:"optional"` // volume mounts incase of data persistence needed by the container
 }
 
 // Volume represents properties for creating a EBS Volume for the TaskDefinition
 type Volume struct {
-	Name string
-	Size string
+	Name string `field:"required"` // name of the EBS volume to be created for the EC2 service
+	Size string `field:"required"` // size of the EBS volume to be crated for the EC2 service
 }
 
 // ServiceDiscoveryProps represents properties for service discovery using CLoudMap for the EC2 based Service
 type ServiceDiscoveryProps struct {
-	ServiceName       string                 // cloudmap namespace service name of the EC2 based ECS Service for service discovery
-	ServicePort       float64                // port configuration of the EC2 based ECS Service for service discovery
-	CloudMapNamespace CloudMapNamespaceProps // cloudmap namespace properties
+	ServiceName       string                 `field:"required"` // cloudmap namespace service name of the EC2 based ECS Service for service discovery
+	ServicePort       float64                `field:"required"` // port configuration of the EC2 based ECS Service for service discovery
+	CloudMapNamespace CloudMapNamespaceProps `field:"required"` // cloudmap namespace properties
 }
 
 // CloudMapNamespaceProps represents properties for retrieving the CloudMapNamespace
 type CloudMapNamespaceProps struct {
-	NamespaceName string // name of the namespace
-	NamespaceId   string // id of the namespace
-	NamespaceArn  string // arn of the namespace
+	NamespaceName string `field:"required"` // name of the namespace
+	NamespaceId   string `field:"required"` // id of the namespace
+	NamespaceArn  string `field:"required"` // arn of the namespace
 }
 
 // LoadBalancerProps represents the properties for associating the Application Load-Balancer with the EC2 based ECS Service
 type LoadBalancerProps struct {
-	SecurityGroupId       string            // id of the load-balancer's security group
-	TargetHealthCheckPath string            // health check path of the target to validate target health.
-	ListenerArn           string            // arn of the HTTPS listener associated with the load balancer
-	ListenerRuleProps     ListenerRuleProps // listener rule properties for handling traffic to multiple targets inside the load-balancer. Service(s) will be registered as individual targets inside a single load balancer
+	SecurityGroupId       string            `field:"required"` // id of the load-balancer's security group
+	TargetHealthCheckPath string            `field:"required"` // health check path of the target to validate target health.
+	ListenerArn           string            `field:"required"` // arn of the HTTPS listener associated with the load balancer
+	ListenerRuleProps     ListenerRuleProps `field:"required"` // listener rule properties for handling traffic to multiple targets inside the load-balancer. Service(s) will be registered as individual targets inside a single load balancer
 }
 
 // ListenerRuleProps represents the Application Load-Balancer listener rule properties
 type ListenerRuleProps struct {
-	Priority      float64 // rule priority
-	PathCondition string  // path for path based routing, like '/api/*' will be routed to a target
-	HostCondition string  // host for host based routing, like 'app.example.com' will be routed to a target
+	Priority      float64 `field:"required"` // rule priority
+	PathCondition string  `field:"optional"` // path for path based routing, like '/api/*' will be routed to a target
+	HostCondition string  `field:"optional"` // host for host based routing, like 'app.example.com' will be routed to a target
 }
 
 // loadBalancedEc2Service construct type
@@ -282,7 +283,7 @@ func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *Lo
 	// adds otel container-defintion to task-defintion if tracing is enabled
 	var otelContainerDef ecs.ContainerDefinition = nil
 	if props.IsTracingEnabled {
-		otelContainerDef = ecs.NewContainerDefinition(scope, jsii.String("OtelContainerDefinition"), &ecs.ContainerDefinitionProps{
+		otelContainerDef = ecs.NewContainerDefinition(scope, jsii.String(RandomString(4)+"OtelContainerDefinition"), &ecs.ContainerDefinitionProps{
 			TaskDefinition: taskDef,
 			ContainerName:  jsii.String("otel-xray"),
 			Image:          ecs.ContainerImage_FromRegistry(jsii.String(OtelContainerImage), &ecs.RepositoryImageProps{}),
@@ -410,14 +411,23 @@ func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *Lo
 		},
 	})
 
+	var elbListenerConditions []elb2.ListenerCondition
+	pathCondition := props.LoadBalancer.ListenerRuleProps.PathCondition
+	hostCondition := props.LoadBalancer.ListenerRuleProps.HostCondition
+	if hostCondition != "" && pathCondition != "" {
+		elbListenerConditions = append(elbListenerConditions, elb2.ListenerCondition_HostHeaders(jsii.Strings(props.LoadBalancer.ListenerRuleProps.HostCondition)))
+		elbListenerConditions = append(elbListenerConditions, elb2.ListenerCondition_PathPatterns(jsii.Strings(props.LoadBalancer.ListenerRuleProps.PathCondition)))
+	} else if hostCondition != "" {
+		elbListenerConditions = append(elbListenerConditions, elb2.ListenerCondition_HostHeaders(jsii.Strings(props.LoadBalancer.ListenerRuleProps.HostCondition)))
+	} else if pathCondition != "" {
+		elbListenerConditions = append(elbListenerConditions, elb2.ListenerCondition_PathPatterns(jsii.Strings(props.LoadBalancer.ListenerRuleProps.PathCondition)))
+	}
+
 	// creates a listener rule for the application load-balancer for routing traffic to the EC2Service
 	elb2.NewApplicationListenerRule(this, jsii.String("ALBListenerRule"), &elb2.ApplicationListenerRuleProps{
-		Priority: jsii.Number(props.LoadBalancer.ListenerRuleProps.Priority),
-		Action:   elb2.ListenerAction_Forward(&[]elb2.IApplicationTargetGroup{ecsServiceTargetGroup}, &elb2.ForwardOptions{}),
-		Conditions: &[]elb2.ListenerCondition{
-			elb2.ListenerCondition_HostHeaders(jsii.Strings(props.LoadBalancer.ListenerRuleProps.HostCondition)),
-			elb2.ListenerCondition_PathPatterns(jsii.Strings(props.LoadBalancer.ListenerRuleProps.PathCondition)),
-		},
+		Priority:   jsii.Number(props.LoadBalancer.ListenerRuleProps.Priority),
+		Action:     elb2.ListenerAction_Forward(&[]elb2.IApplicationTargetGroup{ecsServiceTargetGroup}, &elb2.ForwardOptions{}),
+		Conditions: &elbListenerConditions,
 		Listener: elb2.ApplicationListener_FromApplicationListenerAttributes(this, jsii.String("ALBListener"), &elb2.ApplicationListenerAttributes{
 			ListenerArn:   jsii.String(props.LoadBalancer.ListenerArn),
 			SecurityGroup: ec2.SecurityGroup_FromSecurityGroupId(this, jsii.String("ALBSecurityGroup"), jsii.String(props.LoadBalancer.SecurityGroupId), &ec2.SecurityGroupImportOptions{}),
@@ -570,4 +580,14 @@ func retrieveCloudMapNamespaceService(scope constructs.Construct, sd ServiceDisc
 		},
 	)
 	return privateNamespace
+}
+
+func RandomString(n int) string {
+	var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+
+	s := make([]rune, n)
+	for i := range s {
+		s[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(s)
 }
