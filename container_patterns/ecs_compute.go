@@ -1,8 +1,3 @@
-// Package containerpatterns provides level 3 CDK constructs for container based patterns.
-//
-// Provides patterns like:
-//   - load-balanced ECS service based on EC2.
-//   - non load-balanced ECS service based on EC2.
 package containerpatterns
 
 import (

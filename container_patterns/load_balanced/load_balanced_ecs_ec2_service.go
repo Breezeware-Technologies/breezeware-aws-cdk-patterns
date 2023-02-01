@@ -1,14 +1,8 @@
-// Package containerpatterns provides level 3 CDK constructs for container based patterns.
-//
-// Provides patterns like:
-//   - load-balanced ECS service based on EC2.
-//   - non load-balanced ECS service based on EC2.
 package containerpatterns
 
 import (
 	"strconv"
 
-	//	brznetwork "breezeware-aws-cdk-patterns-samples/network"
 	brznetwork "github.com/Breezeware-Technologies/breezeware-aws-cdk-patterns/network"
 	core "github.com/aws/aws-cdk-go/awscdk/v2"
 	ec2 "github.com/aws/aws-cdk-go/awscdk/v2/awsec2"
@@ -35,10 +29,10 @@ type (
 
 // constants
 const (
-	DefaultLogRetention       cloudwatchlogs.RetentionDays = cloudwatchlogs.RetentionDays_TWO_WEEKS
-	DefaultDockerVolumeDriver string                       = "rexray/ebs"
-	DefaultDockerVolumeType   string                       = "gp2"
-	OtelContainerImage        string                       = "amazon/aws-otel-collector:v0.25.0"
+	DefaultLogRetention       cloudwatchlogs.RetentionDays = cloudwatchlogs.RetentionDays_TWO_WEEKS // Default CloudWatch Log retention with value TWO_WEEKS
+	DefaultDockerVolumeDriver string                       = "rexray/ebs"                           // Default Docker volume driver with value 'rexay/ebs'
+	DefaultDockerVolumeType   string                       = "gp2"                                  // Default Docker volume type with value 'gp2'
+	OtelContainerImage        string                       = "amazon/aws-otel-collector:v0.25.0"    // OTEL conatiner image with tag
 )
 
 const (
@@ -157,7 +151,9 @@ type loadBalancedEc2Service struct {
 
 // LoadBalancedEc2Service provides implementation for the loadBalancedEc2Service
 type LoadBalancedEc2Service interface {
+	// LogGroup returns the Log Group created for the Load-Balanced EC2 service
 	LogGroup() cloudwatchlogs.LogGroup
+	// Service returns the EC2 service created
 	Service() ecs.Ec2Service
 }
 
@@ -169,7 +165,7 @@ func (s *loadBalancedEc2Service) LogGroup() cloudwatchlogs.LogGroup {
 	return s.logGroup
 }
 
-// NewLoadBalancedEc2Service sreates a new ECS EC2 based service.
+// NewLoadBalancedEc2Service creates a new Load-Balanced ECS EC2 based service.
 //
 // Internally creates a Log Group for each service created
 // and attaches a policy statement to the task role if present or creates a new task role with AWS XRay access if tracing is enabled
@@ -283,7 +279,7 @@ func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *Lo
 	})
 	logGroup.ApplyRemovalPolicy(core.RemovalPolicy_DESTROY)
 
-	// added otel container-defintion to task-defintion if tracing is enabled
+	// adds otel container-defintion to task-defintion if tracing is enabled
 	var otelContainerDef ecs.ContainerDefinition = nil
 	if props.IsTracingEnabled {
 		otelContainerDef = ecs.NewContainerDefinition(scope, jsii.String("OtelContainerDefinition"), &ecs.ContainerDefinitionProps{
@@ -315,7 +311,7 @@ func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *Lo
 	}
 
 	for index, containerDef := range props.TaskDefinition.ApplicationContainers {
-		// update task definition with statements providing container access to specific environment file in th S3 bucket
+		// updates task definition with statements providing container access to specific environment file in th S3 bucket
 		taskDef.AddToExecutionRolePolicy(
 			createEnvironmentFileObjectReadOnlyAccessPolicyStatement(
 				props.TaskDefinition.EnvironmentFile.BucketArn,
@@ -335,8 +331,10 @@ func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *Lo
 			logGroup,
 			props.IsTracingEnabled,
 		)
-		// addes volume mounts for the container definition
-		cd.AddMountPoints(convertContainerVolumeMountPoints(containerDef.VolumeMountPoint)...)
+		if props.TaskDefinition.RequiresVolume {
+			// addes volume mounts for the container definition
+			cd.AddMountPoints(convertContainerVolumeMountPoints(containerDef.VolumeMountPoint)...)
+		}
 
 		// creates a container link between the actual container and the otel xray container if tracing is enabled
 		// Only works in NetworkMode_BRIDGE mode
@@ -363,7 +361,7 @@ func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *Lo
 			DnsRecordType:     servicediscovery.DnsRecordType_A,
 			ContainerPort:     jsii.Number(props.ServiceDiscovery.ServicePort),
 			Name:              jsii.String(props.ServiceDiscovery.ServiceName),
-			CloudMapNamespace: getCloudMapNamespaceService(this, props.ServiceDiscovery),
+			CloudMapNamespace: retrieveCloudMapNamespaceService(this, props.ServiceDiscovery),
 		}
 	}
 	// builds a Ec2ServiceProps
@@ -562,7 +560,8 @@ func createTaskContainerDefaultXrayPolciyStatement() iam.PolicyStatement {
 	return policy
 }
 
-func getCloudMapNamespaceService(scope constructs.Construct, sd ServiceDiscoveryProps) servicediscovery.IPrivateDnsNamespace {
+// retrieveCloudMapNamespaceService retrieves the CLoudMap Namespace from ServiceDiscoveryProps
+func retrieveCloudMapNamespaceService(scope constructs.Construct, sd ServiceDiscoveryProps) servicediscovery.IPrivateDnsNamespace {
 	privateNamespace := servicediscovery.PrivateDnsNamespace_FromPrivateDnsNamespaceAttributes(
 		scope, jsii.String("CloudMapNamespace"), &servicediscovery.PrivateDnsNamespaceAttributes{
 			NamespaceArn:  jsii.String(sd.CloudMapNamespace.NamespaceArn),

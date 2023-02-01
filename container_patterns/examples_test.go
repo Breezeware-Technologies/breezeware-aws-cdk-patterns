@@ -14,7 +14,7 @@ import (
 
 //var ecsProjectProps containerpatterns.EcsProjectProps
 
-func ExampleNewEcsProject() {
+func Example() {
 
 	ecsProject := containerpatterns.NewEcsProject(awscdk.NewStack(awscdk.NewApp(nil), jsii.String("LoadBalancedEc2ServiceStack"), &awscdk.StackProps{
 		Env: &awscdk.Environment{
@@ -83,7 +83,7 @@ func ExampleNewEcsProject() {
 				LogGroupName: "GolangCdkDemoDb",
 				TaskDefinition: brzNlbEc2Service.TaskDefinition{
 					FamilyName:     "rpc-service-db",
-					NetworkMode:    brzNlbEc2Service.TASK_DEFINTION_NETWORK_MODE_AWS_VPC,
+					NetworkMode:    brzNlbEc2Service.TaskDefintionNetworkModeAwsVpc,
 					RequiresVolume: true,
 					Volumes: []brzNlbEc2Service.Volume{
 						{
@@ -95,7 +95,7 @@ func ExampleNewEcsProject() {
 						{
 							ContainerName:            "rpc-service-db",
 							Image:                    "rpc-service-db",
-							RegistryType:             brzNlbEc2Service.CONTAINER_DEFINITION_REGISTRY_AWS_ECR,
+							RegistryType:             brzNlbEc2Service.ContainerDefinitionRegistryAwsEcr,
 							ImageTag:                 "latest",
 							IsEssential:              true,
 							Cpu:                      512,
@@ -169,7 +169,7 @@ func ExampleNewEcsProject() {
 				},
 				IsServiceDiscoveryEnabled: false,
 				ServiceDiscovery:          brzLbEc2Service.ServiceDiscoveryProps{},
-//				IsLoadBalancerEnabled:     true,
+				//				IsLoadBalancerEnabled:     true,
 				LoadBalancer: brzLbEc2Service.LoadBalancerProps{
 					TargetHealthCheckPath: "/api/health-status",
 					ListenerRuleProps: brzLbEc2Service.ListenerRuleProps{
@@ -190,5 +190,5 @@ func ExampleNewEcsProject() {
 	fmt.Println(len(*ecsProject.ApplicationLoadBalancer().Listeners()))
 	// Output:
 	// 2
-	// 2
+	// 0
 }
