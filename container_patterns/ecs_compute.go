@@ -195,8 +195,9 @@ func NewContainerCompute(scope constructs.Construct, id *string, props *EcsCompu
 		}
 	}
 	envFileBucket := s3.NewBucket(this, jsii.String("EnvironmentFileBucket"), &s3.BucketProps{
-		BucketName: jsii.String(props.EnvironmentFileBucket.Name),
-		Versioned:  jsii.Bool(props.EnvironmentFileBucket.IsVersioned),
+		BucketName:        jsii.String(props.EnvironmentFileBucket.Name),
+		Versioned:         jsii.Bool(props.EnvironmentFileBucket.IsVersioned),
+		AutoDeleteObjects: jsii.Bool(true),
 	})
 	envFileBucket.ApplyRemovalPolicy(core.RemovalPolicy_DESTROY)
 
