@@ -355,7 +355,6 @@ func NewNonLoadBalancedEc2Service(scope constructs.Construct, id *string, props 
 		PropagateTags:   ecs.PropagatedTagSource_SERVICE,
 		// tag(s) propagation
 		EnableECSManagedTags: jsii.Bool(true),
-		SecurityGroups:       &serviceSecurityGroups,
 	}
 	// configures security groups for the EC2Service if task-definition's network mode is TaskDefintionNetworkModeAwsVpc
 	if props.TaskDefinition.NetworkMode == TaskDefintionNetworkModeAwsVpc {
