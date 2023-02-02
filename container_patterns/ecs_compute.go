@@ -9,6 +9,7 @@ import (
 	elbv2 "github.com/aws/aws-cdk-go/awscdk/v2/awselasticloadbalancingv2"
 	iam "github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
 	s3 "github.com/aws/aws-cdk-go/awscdk/v2/awss3"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awsservicediscovery"
 	servicediscovery "github.com/aws/aws-cdk-go/awscdk/v2/awsservicediscovery"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
@@ -21,6 +22,12 @@ var (
 	clusterSecurityGroups []ec2.ISecurityGroup
 	// loadBalancerSecurityGroup is the Security Group associated with the Application Load-Balancer for Services inside the Cluster
 	loadBalancerSecurityGroup ec2.ISecurityGroup
+	// loadBalancer is the application loadbalancer associated with the Cluster
+	loadBalancer elbv2.ApplicationLoadBalancer
+	// httpsListener is the application listener associated with the Application Load-Balancer for Services inside the Cluster
+	httpsListener elbv2.IApplicationListener
+	// cloudmapNamespace is the cloudmap privateDnsNamespace associated with the vpc created for the Cluster
+	cloudmapNamespace awsservicediscovery.IPrivateDnsNamespace
 )
 
 // ecsCompute represents the compute pattern/construct based on ECS
@@ -193,13 +200,18 @@ func NewContainerCompute(scope constructs.Construct, id *string, props *EcsCompu
 	})
 	envFileBucket.ApplyRemovalPolicy(core.RemovalPolicy_DESTROY)
 
-	loadBalancer := createLoadBalancer(this, jsii.String("LoadBalanerSetup"), &props.LoadBalancer)
+	if props.LoadBalancer != (LoadBalancerOptions{}) {
 
-	httpsListener := createHttpsListener(this, jsii.String("AlbHttpsListener"), &props.LoadBalancer, loadBalancer)
+		loadBalancer = createLoadBalancer(this, jsii.String("LoadBalanerSetup"), &props.LoadBalancer)
 
-	createHttpListener(this, jsii.String("HttpListener"), loadBalancer)
+		httpsListener = createHttpsListener(this, jsii.String("AlbHttpsListener"), &props.LoadBalancer, loadBalancer)
 
-	cloudmapNamespace := createCloudMapNamespace(this, jsii.String("CloudMapNamespace"), &props.CloudmapNamespace)
+		createHttpListener(this, jsii.String("HttpListener"), loadBalancer)
+	}
+
+	if props.CloudmapNamespace != (CloudmapNamespaceProps{}) {
+		cloudmapNamespace = createCloudMapNamespace(this, jsii.String("CloudMapNamespace"), &props.CloudmapNamespace)
+	}
 
 	return &ecsCompute{this, cluster, clusterSecurityGroups, envFileBucket, loadBalancer, loadBalancerSecurityGroup, capacityProviders, cloudmapNamespace, httpsListener}
 }
@@ -373,8 +385,11 @@ func createAsgRole(scope constructs.Construct, id *string, props *AsgProps, poli
 	role := iam.NewRole(scope, id, &iam.RoleProps{
 		Description:    jsii.String("Iam role for autoscaling group " + props.Name),
 		InlinePolicies: &map[string]iam.PolicyDocument{"Ec2VolumeAccess": policyDocument},
-		RoleName:       jsii.String(props.Name + "InstanceProfileRole"),
-		AssumedBy:      iam.NewServicePrincipal(jsii.String("ec2.amazonaws.com"), &iam.ServicePrincipalOpts{}),
+		ManagedPolicies: &[]iam.IManagedPolicy{
+			iam.ManagedPolicy_FromAwsManagedPolicyName(jsii.String("AmazonSSMManagedInstanceCore")),
+		},
+		RoleName:  jsii.String(props.Name + "InstanceProfileRole"),
+		AssumedBy: iam.NewServicePrincipal(jsii.String("ec2.amazonaws.com"), &iam.ServicePrincipalOpts{}),
 	})
 	return role
 }
@@ -415,6 +430,8 @@ func createAutoScalingGroup(scope constructs.Construct, id *string, props *AsgPr
 		jsii.String("echo \"ECS_CLUSTER="+clusterName+"\" >>  /etc/ecs/ecs.config"),
 		jsii.String("echo \"ECS_AWSVPC_BLOCK_IMDS=true\" >> /etc/ecs/ecs.config"),
 		jsii.String("sudo systemctl enable --now --no-block ecs.service"),
+		jsii.String("sudo systemctl enable amazon-ssm-agent"),
+		jsii.String("sudo systemctl start amazon-ssm-agent"),
 		jsii.String("docker plugin install rexray/ebs REXRAY_PREEMPT=true EBS_REGION="+*core.Aws_REGION()+" --grant-all-permissions"),
 	)
 	return asg
