@@ -164,8 +164,9 @@ type ClusterOptions struct {
 
 // BucketOptions represents options for creating a S3 Bucket for handling environment file for the services inside the Cluster compute construct
 type BucketOptions struct {
-	Name        string // Name of the S3 Bucket
-	IsVersioned bool   // IsVersioned flag represents whether object(s) should be versioned or not inside the S3 Bucket
+	Name              string // Name of the S3 Bucket
+	IsVersioned       bool   // IsVersioned flag represents whether object(s) should be versioned or not inside the S3 Bucket
+	AutoDeleteEnabled bool   // IsVersioned flag represents whether object(s) should be versioned or not inside the S3 Bucket
 }
 
 // NewContainerCompute creates a new ECS based compute constructfrom EcsComputeProps
@@ -197,9 +198,9 @@ func NewContainerCompute(scope constructs.Construct, id *string, props *EcsCompu
 	envFileBucket := s3.NewBucket(this, jsii.String("EnvironmentFileBucket"), &s3.BucketProps{
 		BucketName:        jsii.String(props.EnvironmentFileBucket.Name),
 		Versioned:         jsii.Bool(props.EnvironmentFileBucket.IsVersioned),
-		AutoDeleteObjects: jsii.Bool(true),
+		AutoDeleteObjects: jsii.Bool(props.EnvironmentFileBucket.AutoDeleteEnabled),
+		RemovalPolicy:     core.RemovalPolicy_DESTROY,
 	})
-	envFileBucket.ApplyRemovalPolicy(core.RemovalPolicy_DESTROY)
 
 	if props.LoadBalancer != (LoadBalancerOptions{}) {
 
