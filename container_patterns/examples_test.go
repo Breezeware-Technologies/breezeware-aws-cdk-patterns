@@ -152,7 +152,7 @@ func Example() {
 							IsEssential:              true,
 							Cpu:                      512,
 							Memory:                   1458,
-							EnvironmentFileObjectKey: "rpc-service/prod/app.env",
+							EnvironmentFileObjectKey: "rpc-service/prod/ecsProjectApp.env",
 							PortMappings: []ecs.PortMapping{
 								{
 									ContainerPort: jsii.Number(8443),
