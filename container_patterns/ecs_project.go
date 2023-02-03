@@ -95,16 +95,19 @@ func NewEcsProject(scope constructs.Construct, id *string, props *EcsProjectProp
 	computeProps := props.ComputeProps
 	// compute nested stack references
 	computeProps.VpcId = *vpc.VpcId()
-	ecsContainerCompute := NewContainerCompute(computeStack, jsii.String("EcsCompute"), &computeProps)
+    ecsContainerCompute := NewContainerCompute(computeStack, jsii.String("EcsCompute"), &computeProps)
 
 	// applications nested stack references
 	cluster := ecsContainerCompute.Cluster()
 	clusterSecurityGroups := ecsContainerCompute.ClusterSecurityGroups()
 	applicationLoadBalancer := ecsContainerCompute.ApplicationLoadBalancer()
-	cloudMapNamespace := ecsContainerCompute.CloudMapNamespace()
+	var loadBalancerSecurityGroupId, httpsListenerArn string
+	if applicationLoadBalancer != nil {
+		loadBalancerSecurityGroupId = *ecsContainerCompute.AlbSecurityGroup().SecurityGroupId()
+		httpsListenerArn = *ecsContainerCompute.AlbHttpsListener().ListenerArn()
+	}
 	asgCapacityProviders := ecsContainerCompute.AsgCapacityProviders()
-	loadBalancerSecurityGroupId := ecsContainerCompute.AlbSecurityGroup().SecurityGroupId()
-	httpsListenerArn := ecsContainerCompute.AlbHttpsListener().ListenerArn()
+	cloudMapNamespace := ecsContainerCompute.CloudMapNamespace()
 	environmentFileBucket := ecsContainerCompute.EnvironmentFileBucket()
 
 	// applications nested stack with load-balanced & non load-balanced applications
@@ -183,11 +186,11 @@ func NewEcsProject(scope constructs.Construct, id *string, props *EcsProjectProp
 					NamespaceArn:  *cloudMapNamespace.NamespaceArn(),
 				},
 			}
-//			lbEc2ServiceProps.IsLoadBalancerEnabled = true
+			//			lbEc2ServiceProps.IsLoadBalancerEnabled = true
 			lbEc2ServiceProps.LoadBalancer = brzLbEc2Service.LoadBalancerProps{
-				SecurityGroupId:       *loadBalancerSecurityGroupId,
+				SecurityGroupId:       loadBalancerSecurityGroupId,
 				TargetHealthCheckPath: lbEc2ServiceProps.LoadBalancer.TargetHealthCheckPath,
-				ListenerArn:           *httpsListenerArn,
+				ListenerArn:           httpsListenerArn,
 				ListenerRuleProps: brzLbEc2Service.ListenerRuleProps{
 					Priority:      lbEc2ServiceProps.LoadBalancer.ListenerRuleProps.Priority,
 					PathCondition: lbEc2ServiceProps.LoadBalancer.ListenerRuleProps.PathCondition,
