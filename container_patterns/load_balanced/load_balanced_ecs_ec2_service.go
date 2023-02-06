@@ -283,7 +283,7 @@ func NewLoadBalancedEc2Service(scope constructs.Construct, id *string, props *Lo
 	// adds otel container-defintion to task-defintion if tracing is enabled
 	var otelContainerDef ecs.ContainerDefinition = nil
 	if props.IsTracingEnabled {
-		otelContainerDef = ecs.NewContainerDefinition(scope, jsii.String(RandomString(4)+"OtelContainerDefinition"), &ecs.ContainerDefinitionProps{
+		otelContainerDef = ecs.NewContainerDefinition(scope, jsii.String("OtelContainerDefinition"), &ecs.ContainerDefinitionProps{
 			TaskDefinition: taskDef,
 			ContainerName:  jsii.String("otel-xray"),
 			Image:          ecs.ContainerImage_FromRegistry(jsii.String(OtelContainerImage), &ecs.RepositoryImageProps{}),

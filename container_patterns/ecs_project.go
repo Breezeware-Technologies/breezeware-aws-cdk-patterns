@@ -95,7 +95,7 @@ func NewEcsProject(scope constructs.Construct, id *string, props *EcsProjectProp
 	computeProps := props.ComputeProps
 	// compute nested stack references
 	computeProps.VpcId = *vpc.VpcId()
-    ecsContainerCompute := NewEcsCompute(computeStack, jsii.String("EcsCompute"), &computeProps)
+	ecsContainerCompute := NewEcsCompute(computeStack, jsii.String("EcsCompute"), &computeProps)
 
 	// applications nested stack references
 	cluster := ecsContainerCompute.Cluster()

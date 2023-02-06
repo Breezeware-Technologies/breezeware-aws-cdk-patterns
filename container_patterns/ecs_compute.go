@@ -169,8 +169,8 @@ type BucketOptions struct {
 	AutoDeleteEnabled bool   // IsVersioned flag represents whether object(s) should be versioned or not inside the S3 Bucket
 }
 
-// NewContainerCompute creates a new ECS based compute constructfrom EcsComputeProps
-func NewContainerCompute(scope constructs.Construct, id *string, props *EcsComputeProps) EcsCompute {
+// NewEcsCompute creates a new ECS based compute constructfrom EcsComputeProps
+func NewEcsCompute(scope constructs.Construct, id *string, props *EcsComputeProps) EcsCompute {
 
 	this := constructs.NewConstruct(scope, id)
 

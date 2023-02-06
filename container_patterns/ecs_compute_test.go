@@ -33,7 +33,7 @@ func TestEcsComputeClusterResource(t *testing.T) {
 	//Test Case 1
 	t.Run("cluster with container insights enabled", func(t *testing.T) {
 		setup()
-		containerpatterns.NewContainerCompute(stack, jsii.String("EcsCompute"), &containerpatterns.EcsComputeProps{
+		containerpatterns.NewEcsCompute(stack, jsii.String("EcsCompute"), &containerpatterns.EcsComputeProps{
 			VpcId: *jsii.String("vpc-535bd136"),
 			Cluster: containerpatterns.ClusterOptions{
 				Name:                             "test-cluster",
@@ -100,7 +100,7 @@ func TestEcsComputeClusterResource(t *testing.T) {
 	//Test Case 2
 	t.Run("cluster with container insights disabled", func(t *testing.T) {
 		setup()
-		containerpatterns.NewContainerCompute(stack, jsii.String("EcsCompute"), &containerpatterns.EcsComputeProps{
+		containerpatterns.NewEcsCompute(stack, jsii.String("EcsCompute"), &containerpatterns.EcsComputeProps{
 			VpcId: *jsii.String("vpc-535bd136"),
 			Cluster: containerpatterns.ClusterOptions{
 				Name:                             "test-cluster",
@@ -167,7 +167,7 @@ func TestEcsComputeClusterResource(t *testing.T) {
 	//Test Case 3
 	t.Run("cluster with fargate and asg capacity provider enabled", func(t *testing.T) {
 		setup()
-		containerpatterns.NewContainerCompute(stack, jsii.String("EcsCompute"), &containerpatterns.EcsComputeProps{
+		containerpatterns.NewEcsCompute(stack, jsii.String("EcsCompute"), &containerpatterns.EcsComputeProps{
 			VpcId: *jsii.String("vpc-535bd136"),
 			Cluster: containerpatterns.ClusterOptions{
 				Name:                             "test-cluster",
@@ -252,7 +252,7 @@ func TestEcsComputeClusterResource(t *testing.T) {
 	//Test Case 4
 	t.Run("cluster with fargate capacity provider enabled", func(t *testing.T) {
 		setup()
-		containerpatterns.NewContainerCompute(stack, jsii.String("EcsCompute"), &containerpatterns.EcsComputeProps{
+		containerpatterns.NewEcsCompute(stack, jsii.String("EcsCompute"), &containerpatterns.EcsComputeProps{
 			VpcId: *jsii.String("vpc-535bd136"),
 			Cluster: containerpatterns.ClusterOptions{
 				Name:                             "test-cluster",
@@ -332,7 +332,7 @@ func TestEcsComputeClusterResource(t *testing.T) {
 	//Test Case 5
 	t.Run("cluster with asg capacity provider enabled", func(t *testing.T) {
 		setup()
-		containerpatterns.NewContainerCompute(stack, jsii.String("EcsCompute"), &containerpatterns.EcsComputeProps{
+		containerpatterns.NewEcsCompute(stack, jsii.String("EcsCompute"), &containerpatterns.EcsComputeProps{
 			VpcId: *jsii.String("vpc-535bd136"),
 			Cluster: containerpatterns.ClusterOptions{
 				Name:                             "test-cluster",
@@ -435,7 +435,7 @@ func TestEcsComputeClusterResource(t *testing.T) {
 	//Test Case 6
 	t.Run("verify autoscaling group resources", func(t *testing.T) {
 		setup()
-		containerpatterns.NewContainerCompute(stack, jsii.String("EcsCompute"), &containerpatterns.EcsComputeProps{
+		containerpatterns.NewEcsCompute(stack, jsii.String("EcsCompute"), &containerpatterns.EcsComputeProps{
 			VpcId: "vpc-3456789",
 			Cluster: containerpatterns.ClusterOptions{
 				Name:                             "test-cluster",
@@ -538,7 +538,7 @@ func TestEcsComputeLoadBalancerResource(t *testing.T) {
 	//Test Case 1
 	t.Run("cluster with loadbalancer resource enabled", func(t *testing.T) {
 		setup()
-		containerpatterns.NewContainerCompute(stack, jsii.String("EcsCompute"), &containerpatterns.EcsComputeProps{
+		containerpatterns.NewEcsCompute(stack, jsii.String("EcsCompute"), &containerpatterns.EcsComputeProps{
 			VpcId: *jsii.String("vpc-535bd136"),
 			Cluster: containerpatterns.ClusterOptions{
 				Name:                             "test-cluster",
@@ -561,7 +561,7 @@ func TestEcsComputeLoadBalancerResource(t *testing.T) {
 	//Test Case 2
 	t.Run("cluster with loadbalancer resource enabled", func(t *testing.T) {
 		setup()
-		containerpatterns.NewContainerCompute(stack, jsii.String("EcsCompute"), &containerpatterns.EcsComputeProps{
+		containerpatterns.NewEcsCompute(stack, jsii.String("EcsCompute"), &containerpatterns.EcsComputeProps{
 			VpcId: *jsii.String("vpc-535bd136"),
 			Cluster: containerpatterns.ClusterOptions{
 				Name:                             "test-cluster",
@@ -657,7 +657,7 @@ func TestEcsComputeCloudMapResource(t *testing.T) {
 	//Test Case 1
 	t.Run("cluster with cloud map resource enabled", func(t *testing.T) {
 		setup()
-		containerpatterns.NewContainerCompute(stack, jsii.String("EcsCompute"), &containerpatterns.EcsComputeProps{
+		containerpatterns.NewEcsCompute(stack, jsii.String("EcsCompute"), &containerpatterns.EcsComputeProps{
 			VpcId: *jsii.String("vpc-535bd136"),
 			Cluster: containerpatterns.ClusterOptions{
 				Name:                             "test-cluster",
@@ -688,7 +688,7 @@ func TestEcsComputeCloudMapResource(t *testing.T) {
 	//Test Case 2
 	t.Run("cluster with cloud map resource disabled", func(t *testing.T) {
 		setup()
-		containerpatterns.NewContainerCompute(stack, jsii.String("EcsCompute"), &containerpatterns.EcsComputeProps{
+		containerpatterns.NewEcsCompute(stack, jsii.String("EcsCompute"), &containerpatterns.EcsComputeProps{
 			VpcId: *jsii.String("vpc-535bd136"),
 			Cluster: containerpatterns.ClusterOptions{
 				Name:                             "test-cluster",
@@ -713,7 +713,7 @@ func TestEcsComputeS3Resource(t *testing.T) {
 	//Test Case 1
 	t.Run("cluster's env s3 bucket with versioning and auto delete disabled", func(t *testing.T) {
 		setup()
-		containerpatterns.NewContainerCompute(stack, jsii.String("EcsCompute"), &containerpatterns.EcsComputeProps{
+		containerpatterns.NewEcsCompute(stack, jsii.String("EcsCompute"), &containerpatterns.EcsComputeProps{
 			VpcId: *jsii.String("vpc-535bd136"),
 			Cluster: containerpatterns.ClusterOptions{
 				Name:                             "test-cluster",
@@ -745,7 +745,7 @@ func TestEcsComputeS3Resource(t *testing.T) {
 	//Test Case 2
 	t.Run("cluster's env s3 bucket with versioning enabled and auto delete disabled", func(t *testing.T) {
 		setup()
-		containerpatterns.NewContainerCompute(stack, jsii.String("EcsCompute"), &containerpatterns.EcsComputeProps{
+		containerpatterns.NewEcsCompute(stack, jsii.String("EcsCompute"), &containerpatterns.EcsComputeProps{
 			VpcId: *jsii.String("vpc-535bd136"),
 			Cluster: containerpatterns.ClusterOptions{
 				Name:                             "test-cluster",
@@ -780,7 +780,7 @@ func TestEcsComputeS3Resource(t *testing.T) {
 	//Test Case 3
 	t.Run("cluster's env s3 with versioning disabled and auto delete enabled", func(t *testing.T) {
 		setup()
-		containerpatterns.NewContainerCompute(stack, jsii.String("EcsCompute"), &containerpatterns.EcsComputeProps{
+		containerpatterns.NewEcsCompute(stack, jsii.String("EcsCompute"), &containerpatterns.EcsComputeProps{
 			VpcId: *jsii.String("vpc-535bd136"),
 			Cluster: containerpatterns.ClusterOptions{
 				Name:                             "test-cluster",
